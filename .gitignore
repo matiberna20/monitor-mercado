@@ -1,0 +1,13 @@
+# Secretos: NUNCA subir el .env
+.env
+
+# Entorno virtual y caches de Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Datos locales y logs
+data/
+logs/

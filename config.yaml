@@ -1,0 +1,141 @@
+# Configuración general del monitor. Las claves secretas NO van acá: van en .env.
+
+# Qué lista usa el sistema por defecto: "prueba" (10 símbolos) o "completa".
+modo_watchlist: prueba
+
+watchlist_prueba:
+  - AAPL      # EE.UU. (Nasdaq)
+  - NVDA      # EE.UU. (Nasdaq)
+  - SPY       # ETF del S&P 500
+  - GGAL      # ADR argentino (NASDAQ)
+  - YPF       # ADR argentino (NYSE)
+  - ALUA.BA   # Acción argentina (BYMA, cotiza en pesos)
+  - PETR4.SA  # Acción brasileña (B3, cotiza en reales)
+  - VOW3.DE   # Acción alemana (Xetra, cotiza en euros)
+  - BARC.L    # Acción británica (Londres, cotiza en peniques)
+  - BRK-B     # Símbolo con guion (en BYMA el CEDEAR es BRKB.BA)
+
+# Lista completa tomada de tu watchlist.csv (formato de Yahoo Finance).
+watchlist_completa:
+  - PFE
+  - MO
+  - O
+  - VZ
+  - SNDK
+  - PANW
+  - SKHY
+  - CBRS
+  - ASML
+  - SPCX
+  - AVGO
+  - NUGT
+  - JMIA
+  - TTWO
+  - GLOB
+  - TSM
+  - BRK-B
+  - MBGYY
+  - VOW3.DE
+  - ^IXIC
+  - GE
+  - RBLX
+  - TELFY
+  - ADBE
+  - COIN
+  - ALUA.BA
+  - IWM
+  - NKE
+  - GOOGL
+  - ES
+  - DIS
+  - AAL
+  - ADDDF
+  - ADDYY
+  - AMZN
+  - AXP
+  - BA
+  - BMA
+  # - BMWYY   # Yahoo no devuelve datos (25/09/2026). Alternativa: BMW.DE (Xetra, EUR)
+  - CAT
+  - COKE
+  - CSCO
+  - CVX
+  # - EA      # Sin operaciones desde el 04/08/2026 (¿salió de la bolsa?)
+  - F
+  - FDX
+  - GGAL
+  - GM
+  - B
+  - GOOG
+  - GS
+  - IBM
+  - JNJ
+  - MA
+  - MCD
+  - MELI
+  - META
+  - MMM
+  - MNST
+  - MSFT
+  - MSI
+  - MU
+  - PYPL
+  - QQQ
+  - TSLA
+  - RACE
+  - SHEL
+  - SHOP
+  - SNAP
+  - SONY
+  - SPOT
+  - SPY
+  - STEM
+  - UPST
+  - V
+  # - X       # US Steel: sin datos (la compró Nippon Steel en 2025)
+  - XOM
+  - XP
+  - YPF
+  - ZM
+  - JPM
+  - PBR
+  - PLTR
+  - BARC.L
+  - NVDA
+  - NIO
+  - BBDC4.SA
+  - AAPL
+  - BAC
+  - INTC
+  - AMD
+  - PETR4.SA
+
+alertas:
+  # Cada cuántos minutos se consultan los precios.
+  intervalo_minutos: 5
+  # true = solo consulta cada activo mientras su bolsa está abierta.
+  solo_en_horario_de_mercado: true
+  # Minutos extra después del cierre (los datos gratis llegan con demora).
+  margen_minutos_post_cierre: 20
+  # Para alertas que se repiten: tiempo mínimo entre dos avisos de la misma alerta.
+  enfriamiento_minutos_repetir: 60
+
+monedas:
+  # Tipo de cambio para pasar pesos a dólares: "ccl" (contado con liqui, el que
+  # usa el mercado de acciones) u "oficial".
+  dolar_ars: ccl
+  # El CCL se calcula como: precio local * ratio / precio del ADR.
+  ccl_accion_local: GGAL.BA
+  ccl_adr: GGAL
+  ccl_ratio: 10
+  # Símbolo en BYMA cuando no es simplemente "SIMBOLO.BA" (sin guiones).
+  simbolos_byma:
+    YPF: YPFD.BA
+
+avisos:
+  # Canal por donde salen los avisos (por ahora solo Telegram).
+  canal: telegram
+
+rutas:
+  base_de_datos: data/monitor.db
+  logs: logs

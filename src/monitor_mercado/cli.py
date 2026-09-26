@@ -65,7 +65,7 @@ def _salir_con_error(mensaje: str) -> None:
 
 @app.command()
 def crear(
-    datos: list[str] = typer.Argument(..., help="SIMBOLO compra|venta sube|baja|var+|var- VALOR [ars] [repetir]"),
+    datos: list[str] = typer.Argument(..., help="SIMBOLO compra|venta llega|sube|baja|var+|var- VALOR [ars] [repetir]"),
     nota: str | None = typer.Option(None, "--nota", "-n", help="Comentario que se incluye en el aviso."),
 ) -> None:
     """Crea una alerta. Ej.: monitor crear AAPL compra baja 180"""
@@ -129,7 +129,7 @@ def revisar(forzar: bool = typer.Option(False, "--forzar", help="Ignorar el hora
                 )
             except Exception as e:  # noqa: BLE001
                 log.error("No se pudo enviar el aviso por Telegram: %s", e)
-    typer.echo(f"Revisión terminada: {len(disparos)} alerta(s) disparada(s).")
+    typer.echo(formato.mensaje_revision(len(disparos)))
 
 
 @app.command("validar-watchlist")

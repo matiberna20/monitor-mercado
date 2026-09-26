@@ -87,13 +87,20 @@ def mensaje_disparo(d: Disparo) -> str:
 def mensaje_creada(r: ResultadoCreacion) -> str:
     """Confirmación de alerta creada."""
     texto = f"Alerta creada:\n{linea_alerta(r.alerta)}\nAhora: {detalle_precio(r.precio_actual)}"
+    if r.alerta.nota:
+        texto += f"\nNota: {r.alerta.nota}"
     if r.aviso:
         texto += f"\n\n{r.aviso}"
-    return texto
+    return texto + pie_de_mensaje()
 
 
 def mensaje_listado(alertas: list[Alerta]) -> str:
     """Listado de alertas."""
     if not alertas:
         return "No hay alertas."
-    return "Alertas:\n" + "\n".join(linea_alerta(a) for a in alertas)
+    return "Alertas:\n" + "\n".join(linea_alerta(a) for a in alertas) + pie_de_mensaje()
+
+
+def mensaje_revision(disparos: int) -> str:
+    """Resumen de una revisión manual."""
+    return f"Revisión terminada: {disparos} alerta(s) disparada(s)." + pie_de_mensaje()

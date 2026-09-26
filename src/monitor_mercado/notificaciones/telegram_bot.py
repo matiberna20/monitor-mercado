@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 AYUDA = (
     "Comandos:\n"
-    "/alerta SIMBOLO compra|venta sube|baja|var+|var- VALOR [ars] [repetir]\n"
+    "/alerta SIMBOLO compra|venta llega|sube|baja|var+|var- VALOR [ars] [repetir] [nota TEXTO]\n"
     "/alertas - alertas activas (/alertas todas incluye las cumplidas)\n"
     "/borrar ID - borra una alerta\n"
     "/precio SIMBOLO [ars] - precio actual\n"
@@ -126,7 +126,7 @@ async def cmd_precio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def cmd_revisar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/revisar: revisión manual inmediata."""
     disparos = await _revisar_y_avisar(context, forzar=True)
-    await _responder(update, f"Revisión terminada: {disparos} alerta(s) disparada(s).")
+    await _responder(update, formato.mensaje_revision(disparos))
 
 
 async def ignorar_desconocido(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -91,11 +91,13 @@ Las claves van **siempre** en `.env`, nunca en `config.yaml`. El `.env` está en
 ### 4.1 Formato de una alerta
 
 ```
-SIMBOLO compra|venta sube|baja|var+|var- VALOR [ars] [repetir]
+SIMBOLO compra|venta llega|sube|baja|var+|var- VALOR [ars] [repetir] [nota TEXTO]
 ```
 
 | Ejemplo | Significado |
 |---|---|
+| `AAPL compra llega 300` | Avisame cuando AAPL llegue a US$ 300. La dirección se deduce sola: si hoy está arriba, espera que baje; si está abajo, que suba |
+| `NVDA compra baja 200 nota soporte semanal` | Igual que "baja", con un comentario que aparece en el aviso |
 | `AAPL compra baja 180` | Avisame si AAPL baja de US$ 180 |
 | `NVDA venta sube 250` | Avisame si NVDA sube de US$ 250 |
 | `ALUA.BA compra baja 0.45` | Avisame si ALUA vale menos de US$ 0,45 (convertido al CCL) |
@@ -168,6 +170,9 @@ TradingView.
 - **Horario:** solo se considera la rueda regular (sin pre-market ni after-hours).
 - **Variación diaria:** se mide en la moneda nativa del activo y no incluye el movimiento
   del tipo de cambio.
+- **Aviso perdido si falla Telegram:** si Telegram no responde en 3 intentos, la alerta ya
+  quedó marcada como cumplida y el aviso solo queda en `logs/monitor.log`.
+- **PC apagada o suspendida:** no hay revisiones y tampoco hay aviso de que el bot estuvo caído.
 
 ### Símbolos con problemas en tu watchlist (validado el 25/09/2026)
 

@@ -2,12 +2,15 @@
 
 Formato (el orden de las palabras opcionales no importa):
 
-    SIMBOLO compra|venta sube|baja|var+|var- VALOR [ars] [repetir]
+    SIMBOLO compra|venta llega|sube|baja|var+|var- VALOR [ars] [repetir] [nota TEXTO...]
 
 Ejemplos:
+    AAPL compra llega 180         -> avisar cuando AAPL llegue a 180 USD (la dirección
+                                     se deduce del precio actual)
     AAPL compra baja 180          -> avisar si AAPL baja de 180 USD
     AAPL venta sube 27000 ars     -> avisar si el CEDEAR AAPL.BA sube de $27.000
     GGAL compra var- 5 repetir    -> avisar cada vez que GGAL caiga 5% en el día
+    NVDA compra baja 200 nota soporte semanal
 """
 
 from __future__ import annotations
@@ -23,11 +26,13 @@ class ErrorFormato(ValueError):
 
 
 AYUDA_FORMATO = (
-    "Formato: SIMBOLO compra|venta sube|baja|var+|var- VALOR [ars] [repetir]\n"
+    "Formato: SIMBOLO compra|venta llega|sube|baja|var+|var- VALOR [ars] [repetir] [nota TEXTO]\n"
     "Ejemplos:\n"
+    "  AAPL compra llega 180       (avisa cuando llegue a 180, desde arriba o desde abajo)\n"
     "  AAPL compra baja 180\n"
     "  AAPL venta sube 27000 ars   (precio del CEDEAR en pesos)\n"
-    "  GGAL compra var- 5 repetir  (cae 5% en el día, avisa cada vez)"
+    "  GGAL compra var- 5 repetir  (cae 5% en el día, avisa cada vez)\n"
+    "  NVDA compra baja 200 nota soporte semanal"
 )
 
 _OPERACIONES = {"compra": Operacion.COMPRA, "venta": Operacion.VENTA}
@@ -43,16 +48,22 @@ _CONDICIONES = {
 }
 _MONEDAS = {"ars": Moneda.ARS, "pesos": Moneda.ARS, "usd": Moneda.USD, "dolares": Moneda.USD}
 _REPETIR = {"repetir", "rep", "siempre"}
+# "Llega a": la dirección (sube/baja) se resuelve al crear, con el precio actual.
+_LLEGA = {"llega", "llega_a", "toca"}
 _MILES = re.compile(r"\d{1,3}(\.\d{3})+")
 
 
 @dataclass(frozen=True)
 class SolicitudAlerta:
-    """Datos de una alerta a crear, ya validados."""
+    """Datos de una alerta a crear, ya validados.
+
+    ``condicion`` es None para "llega a": el servicio la convierte en "sube de" o
+    "baja de" según esté el precio actual por debajo o por encima del umbral.
+    """
 
     simbolo: str
     operacion: Operacion
-    condicion: Condicion
+    condicion: Condicion | None
     umbral: float
     moneda: Moneda = Moneda.USD
     repetir: bool = False
@@ -102,19 +113,28 @@ def parsear_alerta(argumentos: list[str]) -> SolicitudAlerta:
     operacion = _OPERACIONES.get(operacion_txt.lower())
     if operacion is None:
         raise ErrorFormato(f"'{operacion_txt}' no es válido: usá 'compra' o 'venta'.")
-    condicion = _CONDICIONES.get(condicion_txt.lower())
-    if condicion is None:
-        raise ErrorFormato(f"'{condicion_txt}' no es válido: usá sube, baja, var+ o var-.")
+    condicion: Condicion | None = None
+    if condicion_txt.lower() not in _LLEGA:
+        condicion = _CONDICIONES.get(condicion_txt.lower())
+        if condicion is None:
+            raise ErrorFormato(
+                f"'{condicion_txt}' no es válido: usá llega, sube, baja, var+ o var-."
+            )
     umbral = parsear_numero(valor_txt)
 
     moneda = Moneda.USD
     repetir = False
-    for extra in resto:
+    nota: str | None = None
+    for i, extra in enumerate(resto):
         palabra = extra.lower()
         if palabra in _MONEDAS:
             moneda = _MONEDAS[palabra]
         elif palabra in _REPETIR:
             repetir = True
+        elif palabra in ("nota", "nota:"):
+            # Todo lo que sigue a "nota" es el comentario.
+            nota = " ".join(resto[i + 1 :]).strip()[:200] or None
+            break
         else:
             raise ErrorFormato(f"No entiendo '{extra}'.\n" + AYUDA_FORMATO)
 
@@ -125,4 +145,5 @@ def parsear_alerta(argumentos: list[str]) -> SolicitudAlerta:
         umbral=umbral,
         moneda=moneda,
         repetir=repetir,
+        nota=nota,
     )

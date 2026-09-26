@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from monitor_mercado.alertas.evaluador import condicion_cumplida, evaluar
-from monitor_mercado.alertas.modelos import Alerta, Moneda
+from monitor_mercado.alertas.modelos import Alerta, Condicion, Moneda
 from monitor_mercado.alertas.parser import SolicitudAlerta
 from monitor_mercado.alertas.repositorio import RepositorioAlertas
 from monitor_mercado.configuracion import Configuracion
@@ -91,14 +91,28 @@ class ServicioAlertas:
             ErrorDatos: Si el símbolo no tiene datos (no se crea la alerta).
         """
         actual = self.precio_en(solicitud.simbolo, solicitud.moneda)
+        avisos = []
+
+        condicion = solicitud.condicion
+        if condicion is None:
+            # "Llega a": si hoy está por debajo del objetivo, esperamos que suba; si
+            # está por encima, que baje.
+            sube = actual.precio < solicitud.umbral
+            condicion = Condicion.SUBE_DE if sube else Condicion.BAJA_DE
+            avisos.append(
+                "'Llega a' se guardó como "
+                + ("'sube de' (hoy está por debajo del objetivo)." if sube
+                   else "'baja de' (hoy está por encima del objetivo).")
+            )
+
         ya_cumple = condicion_cumplida(
-            solicitud.condicion, solicitud.umbral, actual.precio, actual.cotizacion.variacion_pct
+            condicion, solicitud.umbral, actual.precio, actual.cotizacion.variacion_pct
         )
         alerta = self.repo.guardar(
             Alerta(
                 simbolo=solicitud.simbolo,
                 operacion=solicitud.operacion,
-                condicion=solicitud.condicion,
+                condicion=condicion,
                 umbral=solicitud.umbral,
                 moneda=solicitud.moneda,
                 repetir=solicitud.repetir,
@@ -109,7 +123,6 @@ class ServicioAlertas:
         )
         log.info("Alerta creada: %r", alerta)
 
-        avisos = []
         if ya_cumple:
             avisos.append(
                 "La condición ya se cumple con el precio actual: la alerta queda en espera "

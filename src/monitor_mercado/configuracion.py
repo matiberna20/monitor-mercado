@@ -80,7 +80,11 @@ class Secretos(BaseSettings):
     """Claves y tokens leídos de variables de entorno o del archivo .env."""
 
     model_config = SettingsConfigDict(
-        env_file=RAIZ_PROYECTO / ".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=RAIZ_PROYECTO / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        # "TELEGRAM_CHAT_ID=" vacío cuenta como "no configurado", no como error.
+        env_ignore_empty=True,
     )
 
     telegram_bot_token: SecretStr | None = None

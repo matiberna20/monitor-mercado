@@ -264,6 +264,38 @@ def actualizar_sectores() -> None:
 
 
 @app.command()
+def backtest(
+    simbolo: str,
+    explicar: bool = typer.Option(True, "--explicar/--sin-explicar", help="Agregar el resumen para aprender."),
+) -> None:
+    """Prueba la señal técnica contra el pasado (con costos y walk-forward)."""
+    from monitor_mercado.backtest.reporte import explicacion_backtest, grafico_backtest, reporte_backtest
+
+    ctx = _contexto()
+    try:
+        r = ctx.backtest.correr(simbolo)
+    except ErrorDatos as e:
+        _salir_con_error(f"No se pudo hacer el backtest: {e}")
+    typer.echo(reporte_backtest(r))
+    if explicar:
+        typer.echo("\n" + explicacion_backtest(r))
+    typer.echo(f"\nGráfico: {grafico_backtest(r, ctx.cfg.rutas.ruta_graficos())}")
+
+
+@app.command("backtest-watchlist")
+def backtest_watchlist(
+    completa: bool = typer.Option(False, "--completa", help="Usar la watchlist completa."),
+) -> None:
+    """Backtest de todos los activos de la watchlist y conclusión general."""
+    from monitor_mercado.backtest.reporte import resumen_backtests
+
+    ctx = _contexto()
+    simbolos = ctx.cfg.watchlist_completa if completa else ctx.cfg.watchlist_activa
+    typer.echo(f"Corriendo el backtest de {len(simbolos)} activos...\n")
+    typer.echo(resumen_backtests(*ctx.backtest.correr_varios(simbolos)))
+
+
+@app.command()
 def glosario(termino: str | None = typer.Argument(None, help="Término a buscar (ej. rsi).")) -> None:
     """Definiciones de los términos que usa el sistema."""
     typer.echo(texto_glosario(termino))

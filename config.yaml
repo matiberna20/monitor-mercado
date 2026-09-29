@@ -222,6 +222,24 @@ resultados:
     MELI: [AMZN, SHOP, JMIA]
     PETR4.SA: [YPF, XOM, CVX, SHEL]
 
+backtest:
+  # Walk-forward: años para elegir parámetros y años para probarlos fuera de muestra.
+  anios_entrenamiento: 3
+  anios_prueba: 1
+  # Comisión por cada compra o venta, según el mercado (0.006 = 0,6%).
+  comisiones:
+    EE.UU.: 0.001
+    BYMA: 0.006
+    B3: 0.003
+    Xetra: 0.002
+    Londres: 0.002
+  # Diferencia entre el precio esperado y el conseguido al operar (0.0005 = 0,05%).
+  slippage: 0.0005
+  # true = también apuesta a la baja (corto) cuando la señal es bajista.
+  permitir_corto: false
+  # Días hacia adelante para medir si la señal "acertó" la dirección.
+  horizonte_dias: 20
+
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).
   canal: telegram

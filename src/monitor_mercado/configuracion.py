@@ -77,6 +77,21 @@ class ConfigResultados(BaseModel):
     esfuerzo: Literal["low", "medium", "high"] = "medium"
 
 
+class ConfigBacktest(BaseModel):
+    """Parámetros del backtest (Etapa 5)."""
+
+    anios_entrenamiento: int = Field(3, ge=1, le=8)
+    anios_prueba: int = Field(1, ge=1, le=3)
+    comisiones: dict[str, float] = Field(
+        default_factory=lambda: {"EE.UU.": 0.001, "BYMA": 0.006, "B3": 0.003, "Xetra": 0.002, "Londres": 0.002}
+    )
+    comision_por_defecto: float = Field(0.003, ge=0)
+    slippage: float = Field(0.0005, ge=0)
+    permitir_corto: bool = False
+    horizonte_dias: int = Field(20, ge=1)
+    repeticiones_bootstrap: int = Field(2000, ge=100)
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -134,6 +149,7 @@ class Configuracion(BaseModel):
     tecnico: ConfigTecnico = Field(default_factory=ConfigTecnico)
     noticias: ConfigNoticias = Field(default_factory=ConfigNoticias)
     resultados: ConfigResultados = Field(default_factory=ConfigResultados)
+    backtest: ConfigBacktest = Field(default_factory=ConfigBacktest)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 

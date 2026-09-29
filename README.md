@@ -7,8 +7,8 @@ Sistema personal en Python para seguir activos financieros. Se construye por eta
 | 1 | Alertas de precio por Telegram | ✅ Lista |
 | 2 | Datos históricos y análisis técnico | ✅ Lista |
 | 3 | Noticias con puntaje de sentimiento | ✅ Lista |
-| 4 | Análisis de resultados de empresas | ✅ Lista para probar |
-| 5 | Backtesting | Pendiente |
+| 4 | Análisis de resultados de empresas | ✅ Lista |
+| 5 | Backtesting | ✅ Lista para probar |
 
 > ⚠️ **No es asesoramiento financiero.** Todo lo que produce este sistema es un insumo
 > informativo y probabilístico, no una recomendación de inversión. Es un complemento de
@@ -229,9 +229,12 @@ ninguna clave.
 
 No se scrapea ningún sitio (Bloomberg, Reuters, etc.): solo se usan feeds RSS públicos y APIs oficiales.
 
-### Activar el sentimiento con Claude (paso a paso)
+### Activar el sentimiento con Claude (opcional, hoy desactivado)
 
-Sin clave, las noticias se muestran igual, pero sin puntaje y sin la señal final combinada.
+**Por defecto está desactivado** (`noticias.usar_claude: false` y `resultados.usar_claude: false`).
+Así, las noticias se muestran sin puntaje, la señal final es 100% técnica y `/resultados` da el
+link al comunicado oficial para que lo leas vos. Para activarlo, poné esos valores en `true` y
+seguí estos pasos:
 
 1. Entrá a **console.anthropic.com** y creá una cuenta.
 2. En **Billing**, cargá crédito. Es un servicio **pago por uso**: con unos pocos dólares alcanza
@@ -328,6 +331,57 @@ Cada comunicado se analiza una sola vez y queda guardado.
 
 ---
 
+## 4e. Backtesting (Etapa 5)
+
+### Uso
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/backtest SPY` | `monitor backtest SPY` | ¿Seguir la señal le hubiera ganado a comprar y mantener? Con gráfico y explicación |
+| `/backtest_resumen` | `monitor backtest-watchlist` | Lo mismo para toda la watchlist, con conclusión general |
+| `/backtest_resumen completa` | `monitor backtest-watchlist --completa` | Los 89 símbolos |
+
+### Cómo se prueba (sin hacer trampa)
+
+- **Sin mirar el futuro:** la señal usa datos hasta el cierre del día *t* y la operación se hace en
+  la **apertura del día t+1**. Hay un test que lo verifica.
+- **Costos:** comisión por mercado (EE.UU. 0,1%, BYMA 0,6%, B3 0,3%, Europa 0,2%) más 0,05% de
+  slippage en cada compra y cada venta. Se configuran en `config.yaml → backtest`.
+- **Estrategia "solo compra":** compra cuando la señal es alcista, vende y queda en efectivo cuando es
+  bajista. Opcionalmente puede ir corto (`permitir_corto: true`).
+- **Dos pruebas:**
+  1. La señal **tal como la usa el sistema**, sin optimizar nada.
+  2. **Walk-forward:** los umbrales se eligen con 3 años y se miden en el año siguiente, que el
+     optimizador nunca vio. Después se corre la ventana y se repite. Solo cuentan los años de prueba.
+- **Overfitting:** se compara el Sharpe de entrenamiento con el de prueba. Si cae mucho, los
+  parámetros aprendieron ruido. También se muestra si los parámetros elegidos son estables.
+- **¿Suerte?** Un bootstrap por bloques (2.000 remuestreos) estima la probabilidad de que la
+  ventaja sobre comprar y mantener sea azar.
+- **Poder predictivo:** correlación entre la señal y el retorno de los 20 días siguientes, y qué
+  tan seguido acertó la dirección comparado con el porcentaje de veces que el precio sube en general.
+
+### Resultado (datos al 29/09/2026)
+
+Sobre los 85 activos de la watchlist con al menos 4 años de historia, fuera de muestra y con costos:
+
+- La señal le ganó a comprar y mantener (Sharpe) en **14 de 85**, y en **ninguno** con evidencia
+  estadística firme.
+- Diferencia típica de Sharpe: **−0,22**. Correlación típica con el retorno de los 20 días siguientes: **−0,08**.
+- **Conclusión: la señal técnica NO aporta valor como sistema de compra y venta.** Su única
+  ventaja consistente es que **reduce las caídas máximas**, a cambio de rendir menos. Sirve como
+  resumen ordenado de los indicadores, no como predicción.
+
+### Sesgos que el backtest no corrige
+
+- **Supervivencia:** la watchlist tiene empresas que hoy existen. Las que quebraron no están, y eso
+  favorece a "comprar y mantener".
+- **Un solo período:** 10 años son una sola historia de mercado.
+- **Diseño de las reglas:** se eligieron conociendo cómo suelen comportarse estos indicadores.
+- No incluye impuestos ni el rendimiento del efectivo mientras la estrategia está afuera.
+- **Noticias y resultados no se prueban,** porque no hay historial gratuito de noticias clasificadas.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -377,6 +431,7 @@ creando software/
 │   ├── tecnico/             historial, indicadores, patrones, señal, reporte, gráfico
 │   ├── noticias/            fuentes RSS/API, sentimiento con Claude, agregado, reporte
 │   ├── resultados/          calendario, métricas, sorpresas, comunicado, valuación, veredicto
+│   ├── backtest/            simulación con costos, walk-forward, bootstrap, reportes
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

@@ -32,6 +32,9 @@ from monitor_mercado.aviso_legal import pie_de_mensaje
 from monitor_mercado.datos.modelos import ErrorDatos
 from monitor_mercado.explicacion import explicacion_completa, texto_glosario
 from monitor_mercado.noticias.reporte import linea_senal_final, reporte_noticias
+from monitor_mercado.backtest.reporte import (
+    explicacion_backtest, grafico_backtest, reporte_backtest, resumen_backtests,
+)
 from monitor_mercado.notificaciones import formato
 from monitor_mercado.resultados.reporte import (
     explicacion_resultados, mensaje_previo, reporte_resultados, texto_calendario,
@@ -58,6 +61,8 @@ AYUDA = (
     "/resultados SIMBOLO - último resultado trimestral vs. lo esperado\n"
     "/calendario - próximas presentaciones de las empresas que seguís\n"
     "/seguir SIMBOLO · /dejar SIMBOLO · /seguidas - empresas con aviso de resultados\n"
+    "/backtest SIMBOLO - ¿la señal le gana a comprar y mantener? (10 años, con costos)\n"
+    "/backtest_resumen [completa] - backtest de toda la watchlist\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -75,6 +80,8 @@ COMANDOS_MENU = [
     BotCommand("calendario", "Próximas presentaciones"),
     BotCommand("seguir", "Seguir resultados de una empresa"),
     BotCommand("seguidas", "Empresas que seguís"),
+    BotCommand("backtest", "Probar la señal contra el pasado"),
+    BotCommand("backtest_resumen", "Backtest de la watchlist"),
     BotCommand("ayuda", "Ayuda"),
 ]
 
@@ -272,6 +279,37 @@ async def cmd_seguidas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await _responder(update, "Seguís: " + ", ".join(lista) if lista else "No seguís ninguna empresa.")
 
 
+async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/backtest SIMBOLO: prueba la señal contra el pasado."""
+    args = context.args or []
+    if not args:
+        await _responder(update, "Uso: /backtest SIMBOLO   (ej. /backtest SPY)")
+        return
+    ctx = _ctx(context)
+    await _responder(update, f"Corriendo el backtest de {args[0].upper()} (10 años, con costos)...")
+    try:
+        r = await asyncio.to_thread(ctx.backtest.correr, args[0])
+        ruta = await asyncio.to_thread(grafico_backtest, r, ctx.cfg.rutas.ruta_graficos())
+    except ErrorDatos as e:
+        await _responder(update, f"No se pudo hacer el backtest: {e}")
+        return
+    await _responder(update, reporte_backtest(r))
+    if update.effective_message:
+        with open(ruta, "rb") as imagen:
+            await update.effective_message.reply_photo(photo=imagen, caption=f"{r.simbolo} – señal vs. comprar y mantener")
+    await _responder(update, explicacion_backtest(r))
+
+
+async def cmd_backtest_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/backtest_resumen [completa]: backtest de toda la watchlist."""
+    ctx = _ctx(context)
+    completa = bool(context.args) and context.args[0].lower() == "completa"
+    simbolos = ctx.cfg.watchlist_completa if completa else ctx.cfg.watchlist_activa
+    await _responder(update, f"Corriendo el backtest de {len(simbolos)} activos, puede tardar...")
+    resultados, errores = await asyncio.to_thread(ctx.backtest.correr_varios, simbolos)
+    await _responder(update, resumen_backtests(resultados, errores))
+
+
 async def tarea_resultados(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Tarea periódica: avisos de próximas presentaciones y análisis de las recién publicadas."""
     ctx = _ctx(context)
@@ -388,6 +426,8 @@ def construir_bot(ctx: Contexto) -> Application:
         (["seguir"], cmd_seguir),
         (["dejar"], cmd_dejar),
         (["seguidas"], cmd_seguidas),
+        (["backtest"], cmd_backtest),
+        (["backtest_resumen"], cmd_backtest_resumen),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

@@ -18,6 +18,11 @@ from monitor_mercado.noticias.repositorio import RepositorioNoticias
 from monitor_mercado.noticias.sentimiento import ClasificadorClaude
 from monitor_mercado.noticias.servicio import AnalisisNoticias, ServicioNoticias
 from monitor_mercado.registro import configurar_logs
+from monitor_mercado.resultados.comunicado import AnalizadorComunicado, ClienteEdgar
+from monitor_mercado.resultados.datos import FuenteResultadosYahoo
+from monitor_mercado.resultados.repositorio import RepositorioResultados
+from monitor_mercado.resultados.servicio import ServicioResultados
+from monitor_mercado.resultados.valuacion import CacheInfo
 from monitor_mercado.senal_final import SenalFinal, combinar
 from monitor_mercado.tecnico.historico import AlmacenHistorico, FuenteYahoo
 from monitor_mercado.tecnico.servicio import Analisis, ServicioTecnico
@@ -44,6 +49,7 @@ class Contexto:
     servicio: ServicioAlertas
     tecnico: ServicioTecnico
     noticias: ServicioNoticias | None
+    resultados: ServicioResultados | None = None
 
     def analisis_completo(self, simbolo: str) -> AnalisisCompleto:
         """Análisis técnico + noticias + señal final.
@@ -87,24 +93,39 @@ def armar_contexto() -> Contexto:
         cfg.rutas.ruta_historico(), FuenteYahoo(), cfg.tecnico.anios_historia, cfg.tecnico.refresco_horas
     )
 
+    cliente_claude = None
+    if secretos.anthropic_api_key:
+        import anthropic
+
+        cliente_claude = anthropic.Anthropic(api_key=secretos.anthropic_api_key.get_secret_value(), max_retries=3)
+    nombres = ResolutorNombres(cfg.rutas.ruta_nombres(), cfg.noticias.nombres)
+
     noticias = None
     if cfg.noticias.habilitado:
-        clasificador = None
-        if secretos.anthropic_api_key:
-            import anthropic
-
-            clasificador = ClasificadorClaude(
-                cfg.noticias.modelo,
-                cfg.noticias.esfuerzo,
-                anthropic.Anthropic(api_key=secretos.anthropic_api_key.get_secret_value(), max_retries=3),
-            )
-        noticias = ServicioNoticias(
-            armar_fuentes(cfg, secretos),
-            clasificador,
-            RepositorioNoticias(motor),
-            ResolutorNombres(cfg.rutas.ruta_nombres(), cfg.noticias.nombres),
-            cfg.noticias,
+        clasificador = (
+            ClasificadorClaude(cfg.noticias.modelo, cfg.noticias.esfuerzo, cliente_claude) if cliente_claude else None
         )
+        noticias = ServicioNoticias(
+            armar_fuentes(cfg, secretos), clasificador, RepositorioNoticias(motor), nombres, cfg.noticias
+        )
+
+    repo_resultados = RepositorioResultados(motor)
+    if not repo_resultados.seguidas():  # primera vez: se cargan las de config.yaml
+        for s in cfg.resultados.empresas:
+            repo_resultados.seguir(s)
+    fuente_res = FuenteResultadosYahoo()
+    contacto = cfg.resultados.sec_contacto or cfg.noticias.sec_contacto
+    resultados = ServicioResultados(
+        fuente_res,
+        repo_resultados,
+        almacen,
+        CacheInfo(cfg.rutas.ruta_cache_info(), fuente_res),
+        nombres,
+        cfg,
+        edgar=ClienteEdgar(contacto, cfg.rutas.ruta_ciks()) if contacto else None,
+        analizador=AnalizadorComunicado(cliente_claude, cfg.resultados.modelo, cfg.resultados.esfuerzo)
+        if cliente_claude else None,
+    )
 
     return Contexto(
         cfg=cfg,
@@ -113,4 +134,5 @@ def armar_contexto() -> Contexto:
         servicio=ServicioAlertas(RepositorioAlertas(motor), proveedor, cfg),
         tecnico=ServicioTecnico(almacen, cfg),
         noticias=noticias,
+        resultados=resultados,
     )

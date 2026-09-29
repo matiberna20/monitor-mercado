@@ -297,6 +297,18 @@ GLOSARIO: dict[str, str] = {
     "overfitting": "Ajustar tanto una estrategia al pasado que funciona ahí pero falla con datos nuevos.",
     "drawdown": "La caída desde un máximo hasta el mínimo siguiente: mide el peor momento de una inversión.",
     "sharpe": "Retorno por unidad de riesgo (volatilidad). Más alto = mejor relación retorno/riesgo.",
+    "eps": "Ganancia por acción: ganancia neta dividida por la cantidad de acciones.",
+    "consenso": "Promedio de lo que esperan los analistas para un dato (EPS, ingresos). El precio ya lo refleja.",
+    "beat": "Cuando el resultado supera el consenso de analistas. Lo contrario es \"miss\".",
+    "miss": "Cuando el resultado queda por debajo del consenso de analistas.",
+    "guidance": "Proyecciones que da la propia empresa sobre sus próximos trimestres.",
+    "margen": "Qué parte de cada peso vendido queda como ganancia (bruta, operativa o neta).",
+    "ebitda": "Ganancia operativa antes de intereses, impuestos y amortizaciones: aproxima la caja que genera el negocio.",
+    "flujo de caja libre": "Caja que genera el negocio después de invertir en activos (capex). Paga dividendos y deuda.",
+    "deuda neta": "Deuda total menos caja. Si es negativa, la empresa tiene más caja que deuda.",
+    "pe": "Precio / ganancia por acción: cuántos años de ganancias actuales pagás al comprar.",
+    "ev/ebitda": "Valor de la empresa (incluye deuda) sobre su EBITDA. Compara empresas con distinta deuda.",
+    "interanual": "Comparación con el mismo período del año anterior (YoY). Elimina la estacionalidad.",
 }
 
 

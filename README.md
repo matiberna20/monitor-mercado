@@ -6,8 +6,8 @@ Sistema personal en Python para seguir activos financieros. Se construye por eta
 |---|---|---|
 | 1 | Alertas de precio por Telegram | ✅ Lista |
 | 2 | Datos históricos y análisis técnico | ✅ Lista |
-| 3 | Noticias con puntaje de sentimiento | ✅ Lista para probar |
-| 4 | Análisis de resultados de empresas | Pendiente |
+| 3 | Noticias con puntaje de sentimiento | ✅ Lista |
+| 4 | Análisis de resultados de empresas | ✅ Lista para probar |
 | 5 | Backtesting | Pendiente |
 
 > ⚠️ **No es asesoramiento financiero.** Todo lo que produce este sistema es un insumo
@@ -268,6 +268,66 @@ Si querés gastar menos, podés cambiar `noticias.modelo` en `config.yaml` por u
 
 ---
 
+## 4d. Resultados de empresas (Etapa 4)
+
+### Uso
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/resultados AAPL` | `monitor resultados AAPL` | Último resultado trimestral vs. lo esperado, con explicación para aprender |
+| – | `monitor resultados AAPL --fecha 2026-04-30` | Una presentación anterior |
+| `/calendario` | `monitor calendario` | Próximas presentaciones de las empresas que seguís |
+| `/seguir MELI` · `/dejar MELI` · `/seguidas` | `monitor seguir MELI` … | Qué empresas seguís |
+| – | `monitor actualizar-sectores` | Descarga el sector de toda la watchlist, para elegir pares automáticamente |
+
+**Avisos automáticos** (con el bot abierto): cada 2 horas revisa el calendario de las empresas
+que seguís. Te avisa **36 horas antes** de cada presentación y, cuando sale el resultado,
+**te manda el análisis completo** sin que lo pidas.
+
+### Qué evalúa
+
+1. **Contra lo esperado:** EPS e ingresos vs. el consenso de analistas → *beat / en línea / miss*.
+2. **Crecimiento:** interanual (vs. el mismo trimestre del año pasado) y trimestral.
+3. **Márgenes:** bruto, operativo y neto, hoy vs. hace un año.
+4. **Deuda y caja:** deuda neta, deuda neta / EBITDA y flujo de caja libre.
+5. **Reacción del precio:** 1, 3 y 5 ruedas después, descontando lo que hizo el mercado (SPY).
+6. **Comunicado oficial** (opcional): Claude lo resume y detecta la **guidance** (si la empresa
+   subió o bajó sus proyecciones) y el **tono** de la gerencia.
+7. **Valuación:** P/E, EV/EBITDA, precio/valor libro y precio/ventas vs. la mediana de sus pares.
+   **Un buen resultado no es lo mismo que una buena compra.**
+
+El **veredicto** (mejor / en línea / peor de lo esperado) es un promedio ponderado de esos
+factores. El reporte muestra cada voto. La guidance pesa tanto como la sorpresa, porque el
+mercado mira hacia adelante.
+
+### Activar el análisis del comunicado
+
+Necesita dos cosas:
+1. `ANTHROPIC_API_KEY` en el `.env` (la misma de la Etapa 3).
+2. Un mail de contacto en `config.yaml → resultados.sec_contacto`. La SEC exige que quien
+   descarga documentos se identifique; el mail viaja en cada consulta a la SEC.
+
+Cada comunicado se analiza una sola vez y queda guardado.
+
+### Fuentes y limitaciones
+
+| Dato | Fuente | Limitación |
+|---|---|---|
+| Fecha, EPS estimado y reportado | Yahoo Finance | ALUA.BA casi no tiene cobertura de analistas |
+| Consenso de ingresos | Yahoo (solo el próximo trimestre) | El sistema lo **guarda antes** de cada presentación. Para trimestres previos a que empieces a seguir la empresa, no hay dato |
+| Estados contables | Yahoo Finance | Aparecen unos días después de la presentación; últimos 5-7 trimestres |
+| Comunicado (8-K / 6-K) | SEC EDGAR | Solo empresas que presentan ante la SEC (EE.UU. y ADRs como GGAL, YPF, PBR). No cubre ALUA.BA ni PETR4.SA |
+| Múltiplos | Yahoo Finance | Si cotiza en USD pero su balance está en ARS (GGAL, BMA), se omiten los múltiplos que mezclan ambas monedas |
+
+- **Argentina (CNV/Bolsar) y Brasil (CVM/B3)** no ofrecen una API simple. Para las
+  empresas con ADR se usa la SEC; para el resto, solo los estados de Yahoo.
+- Los balances argentinos están ajustados por inflación (NIC 29), pero Yahoo puede mezclar
+  trimestres ajustados y sin ajustar: tomá el crecimiento en pesos con cautela.
+- **Datos mensuales:** no se incluyen, porque casi ninguna empresa de la watchlist los publica
+  de forma estandarizada.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -316,6 +376,7 @@ creando software/
 │   ├── alertas/             modelo, base SQLite, evaluador, parser, servicio
 │   ├── tecnico/             historial, indicadores, patrones, señal, reporte, gráfico
 │   ├── noticias/            fuentes RSS/API, sentimiento con Claude, agregado, reporte
+│   ├── resultados/          calendario, métricas, sorpresas, comunicado, valuación, veredicto
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

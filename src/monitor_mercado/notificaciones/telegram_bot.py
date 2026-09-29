@@ -33,6 +33,9 @@ from monitor_mercado.datos.modelos import ErrorDatos
 from monitor_mercado.explicacion import explicacion_completa, texto_glosario
 from monitor_mercado.noticias.reporte import linea_senal_final, reporte_noticias
 from monitor_mercado.notificaciones import formato
+from monitor_mercado.resultados.reporte import (
+    explicacion_resultados, mensaje_previo, reporte_resultados, texto_calendario,
+)
 from monitor_mercado.tecnico.grafico import generar_grafico
 from monitor_mercado.tecnico.reporte import reporte_completo, reporte_resumen
 
@@ -52,6 +55,9 @@ AYUDA = (
     "/resumen - tendencia de toda la watchlist (/resumen completa para los 89)\n"
     "/noticias SIMBOLO - noticias recientes con su sentimiento\n"
     "/glosario [TERMINO] - definiciones (ej. /glosario rsi)\n"
+    "/resultados SIMBOLO - último resultado trimestral vs. lo esperado\n"
+    "/calendario - próximas presentaciones de las empresas que seguís\n"
+    "/seguir SIMBOLO · /dejar SIMBOLO · /seguidas - empresas con aviso de resultados\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -65,6 +71,10 @@ COMANDOS_MENU = [
     BotCommand("resumen", "Tendencia de la watchlist"),
     BotCommand("noticias", "Noticias con sentimiento"),
     BotCommand("glosario", "Definiciones para aprender"),
+    BotCommand("resultados", "Resultados de una empresa"),
+    BotCommand("calendario", "Próximas presentaciones"),
+    BotCommand("seguir", "Seguir resultados de una empresa"),
+    BotCommand("seguidas", "Empresas que seguís"),
     BotCommand("ayuda", "Ayuda"),
 ]
 
@@ -210,6 +220,76 @@ async def cmd_noticias(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await _responder(update, reporte_noticias(analisis))
 
 
+async def cmd_resultados(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/resultados SIMBOLO: análisis de la última presentación de resultados."""
+    args = context.args or []
+    if not args:
+        await _responder(update, "Uso: /resultados SIMBOLO   (ej. /resultados AAPL)")
+        return
+    ctx = _ctx(context)
+    await _responder(update, f"Analizando los resultados de {args[0].upper()}...")
+    try:
+        r = await asyncio.to_thread(ctx.resultados.analizar, args[0])
+    except ErrorDatos as e:
+        await _responder(update, f"No se pudo analizar: {e}")
+        return
+    await _responder(update, reporte_resultados(r))
+    await _responder(update, explicacion_resultados(r))
+
+
+async def cmd_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/calendario: próximas presentaciones de las empresas seguidas."""
+    ctx = _ctx(context)
+    seguidas = ctx.resultados.repo.seguidas()
+    proximas = await asyncio.to_thread(ctx.resultados.proximas, seguidas)
+    await _responder(update, texto_calendario(proximas, seguidas))
+
+
+async def cmd_seguir(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/seguir SIMBOLO: avisar cuando presente resultados."""
+    if not context.args:
+        await _responder(update, "Uso: /seguir SIMBOLO")
+        return
+    s = context.args[0].upper()
+    nuevo = _ctx(context).resultados.repo.seguir(s)
+    await _responder(update, f"Ahora seguís {s}: te aviso antes y después de que presente resultados."
+                     if nuevo else f"Ya seguías {s}.")
+
+
+async def cmd_dejar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/dejar SIMBOLO: dejar de seguir sus resultados."""
+    if not context.args:
+        await _responder(update, "Uso: /dejar SIMBOLO")
+        return
+    s = context.args[0].upper()
+    ok = _ctx(context).resultados.repo.dejar(s)
+    await _responder(update, f"Dejaste de seguir {s}." if ok else f"No seguías {s}.")
+
+
+async def cmd_seguidas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/seguidas: empresas cuyos resultados seguís."""
+    lista = _ctx(context).resultados.repo.seguidas()
+    await _responder(update, "Seguís: " + ", ".join(lista) if lista else "No seguís ninguna empresa.")
+
+
+async def tarea_resultados(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tarea periódica: avisos de próximas presentaciones y análisis de las recién publicadas."""
+    ctx = _ctx(context)
+    chat_id: int = context.application.bot_data["chat_id"]
+    try:
+        novedades = await asyncio.to_thread(ctx.resultados.revisar_calendario)
+    except Exception:  # noqa: BLE001 - no debe tirar el bot
+        log.exception("Error revisando el calendario de resultados")
+        return
+    for tipo, dato in novedades:
+        if tipo == "previo":
+            await _enviar(context, chat_id, mensaje_previo(dato))
+        else:
+            for texto in (reporte_resultados(dato), explicacion_resultados(dato)):
+                for parte in partir_mensaje(texto):
+                    await _enviar(context, chat_id, parte)
+
+
 async def cmd_glosario(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/glosario [TERMINO]: definiciones para aprender."""
     await _responder(update, texto_glosario(" ".join(context.args or []) or None))
@@ -303,6 +383,11 @@ def construir_bot(ctx: Contexto) -> Application:
         (["resumen"], cmd_resumen),
         (["noticias"], cmd_noticias),
         (["glosario"], cmd_glosario),
+        (["resultados"], cmd_resultados),
+        (["calendario"], cmd_calendario),
+        (["seguir"], cmd_seguir),
+        (["dejar"], cmd_dejar),
+        (["seguidas"], cmd_seguidas),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))
@@ -311,5 +396,9 @@ def construir_bot(ctx: Contexto) -> Application:
     if app.job_queue is None:
         raise RuntimeError("Falta el extra job-queue: pip install 'python-telegram-bot[job-queue]'")
     app.job_queue.run_repeating(tarea_periodica, interval=intervalo, first=15, name="revisar_alertas")
+    if ctx.resultados is not None:
+        app.job_queue.run_repeating(tarea_resultados, interval=cfg.resultados.revision_horas * 3600, first=60,
+                                    name="revisar_resultados")
+        log.info("Calendario de resultados revisado cada %s horas.", cfg.resultados.revision_horas)
     log.info("Revisión de alertas programada cada %d minutos.", cfg.alertas.intervalo_minutos)
     return app

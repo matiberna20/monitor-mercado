@@ -193,6 +193,77 @@ def noticias(simbolo: str) -> None:
 
 
 @app.command()
+def resultados(
+    simbolo: str,
+    fecha: str | None = typer.Option(None, "--fecha", help="Presentación más cercana a esta fecha (AAAA-MM-DD)."),
+    explicar: bool = typer.Option(True, "--explicar/--sin-explicar", help="Agregar el resumen para aprender."),
+) -> None:
+    """Análisis de la última presentación de resultados de una empresa."""
+    from datetime import date as _date
+
+    from monitor_mercado.resultados.reporte import explicacion_resultados, reporte_resultados
+
+    ctx = _contexto()
+    try:
+        r = ctx.resultados.analizar(simbolo, _date.fromisoformat(fecha) if fecha else None)
+    except ErrorDatos as e:
+        _salir_con_error(f"No se pudo analizar: {e}")
+    typer.echo(reporte_resultados(r))
+    if explicar:
+        typer.echo("\n" + explicacion_resultados(r))
+
+
+@app.command()
+def calendario() -> None:
+    """Próximas presentaciones de resultados de las empresas que seguís."""
+    from monitor_mercado.resultados.reporte import texto_calendario
+
+    ctx = _contexto()
+    seguidas = ctx.resultados.repo.seguidas()
+    typer.echo(texto_calendario(ctx.resultados.proximas(seguidas), seguidas))
+
+
+@app.command()
+def seguir(simbolo: str) -> None:
+    """Empezar a seguir los resultados de una empresa."""
+    ctx = _contexto()
+    nuevo = ctx.resultados.repo.seguir(simbolo)
+    typer.echo(f"Ahora seguís {simbolo.upper()}." if nuevo else f"Ya seguías {simbolo.upper()}.")
+
+
+@app.command()
+def dejar(simbolo: str) -> None:
+    """Dejar de seguir los resultados de una empresa."""
+    ctx = _contexto()
+    ok = ctx.resultados.repo.dejar(simbolo)
+    typer.echo(f"Dejaste de seguir {simbolo.upper()}." if ok else f"No seguías {simbolo.upper()}.")
+
+
+@app.command()
+def seguidas() -> None:
+    """Empresas cuyos resultados seguís."""
+    ctx = _contexto()
+    typer.echo(", ".join(ctx.resultados.repo.seguidas()) or "Ninguna.")
+
+
+@app.command("actualizar-sectores")
+def actualizar_sectores() -> None:
+    """Descarga sector, industria y múltiplos de toda la watchlist (para elegir pares)."""
+    from monitor_mercado.resultados.valuacion import CacheInfo
+
+    ctx = _contexto()
+    cache = CacheInfo(ctx.cfg.rutas.ruta_cache_info(), ctx.resultados.fuente)
+    simbolos = [s for s in ctx.cfg.watchlist_completa if not s.startswith("^")]
+    typer.echo(f"Consultando {len(simbolos)} empresas (tarda unos minutos)...")
+    for s in simbolos:
+        try:
+            i = cache.obtener(s)
+            typer.echo(f"  {s:10} {i.get('sector') or '-'} / {i.get('industry') or '-'}")
+        except ErrorDatos as e:
+            typer.echo(f"  {s:10} error: {e}")
+
+
+@app.command()
 def glosario(termino: str | None = typer.Argument(None, help="Término a buscar (ej. rsi).")) -> None:
     """Definiciones de los términos que usa el sistema."""
     typer.echo(texto_glosario(termino))

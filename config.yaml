@@ -192,6 +192,30 @@ noticias:
   # de empresas de EE.UU.). Vacío = EDGAR desactivado.
   sec_contacto: ""
 
+resultados:
+  # Empresas cuyos resultados seguís (te avisa antes y después de que presenten).
+  # También podés agregar o quitar desde Telegram con /seguir y /dejar.
+  empresas: [AAPL, NVDA, GGAL, YPF, MELI, PETR4.SA]
+  # Cada cuántas horas se revisa el calendario de resultados.
+  revision_horas: 2
+  # Con cuánta anticipación te avisa que una empresa va a presentar.
+  aviso_previo_horas: 36
+  # Mail de contacto que exige la SEC para descargar comunicados (8-K / 6-K).
+  # Vacío = no se analizan comunicados (no hay guidance ni tono).
+  sec_contacto: ""
+  # Modelo de Claude que lee el comunicado ("medium": textos largos y más matices).
+  modelo: claude-opus-5-5
+  esfuerzo: medium
+  # Pares para comparar la valuación. Si una empresa no está acá, se usan las de tu
+  # watchlist de la misma industria o sector (ver 'monitor actualizar-sectores').
+  pares:
+    AAPL: [MSFT, GOOGL, META, AMZN, SONY]
+    NVDA: [AMD, AVGO, TSM, INTC, MU, ASML]
+    GGAL: [BMA, BAC, JPM, XP]
+    YPF: [PBR, XOM, CVX, SHEL]
+    MELI: [AMZN, SHOP, JMIA]
+    PETR4.SA: [YPF, XOM, CVX, SHEL]
+
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).
   canal: telegram

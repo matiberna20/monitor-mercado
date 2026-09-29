@@ -63,6 +63,18 @@ class ConfigNoticias(BaseModel):
     sec_contacto: str = ""
 
 
+class ConfigResultados(BaseModel):
+    """Parámetros del análisis de resultados (Etapa 4)."""
+
+    empresas: list[str] = Field(default_factory=list)
+    pares: dict[str, list[str]] = Field(default_factory=dict)
+    revision_horas: float = Field(2, gt=0)
+    aviso_previo_horas: float = Field(36, gt=0)
+    sec_contacto: str = ""
+    modelo: str = "claude-opus-5-5"
+    esfuerzo: Literal["low", "medium", "high"] = "medium"
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -75,6 +87,8 @@ class ConfigRutas(BaseModel):
     base_de_datos: str = "data/monitor.db"
     historico: str = "data/historico"
     nombres: str = "data/nombres.json"
+    cache_info: str = "data/info_empresas.json"
+    ciks_sec: str = "data/ciks_sec.json"
     graficos: str = "data/graficos"
     logs: str = "logs"
 
@@ -85,6 +99,14 @@ class ConfigRutas(BaseModel):
     def ruta_nombres(self) -> Path:
         """Archivo con los nombres de empresa ya resueltos."""
         return _absoluta(self.nombres)
+
+    def ruta_cache_info(self) -> Path:
+        """Archivo con la información de empresas (sector, múltiplos) cacheada."""
+        return _absoluta(self.cache_info)
+
+    def ruta_ciks(self) -> Path:
+        """Archivo con los códigos CIK de la SEC."""
+        return _absoluta(self.ciks_sec)
 
     def ruta_graficos(self) -> Path:
         """Carpeta de los gráficos generados."""
@@ -109,6 +131,7 @@ class Configuracion(BaseModel):
     monedas: ConfigMonedas = Field(default_factory=ConfigMonedas)
     tecnico: ConfigTecnico = Field(default_factory=ConfigTecnico)
     noticias: ConfigNoticias = Field(default_factory=ConfigNoticias)
+    resultados: ConfigResultados = Field(default_factory=ConfigResultados)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 

@@ -48,6 +48,21 @@ class ConfigTecnico(BaseModel):
     ruedas_grafico: int = Field(180, ge=30)
 
 
+class ConfigNoticias(BaseModel):
+    """Parámetros de noticias y sentimiento (Etapa 3)."""
+
+    habilitado: bool = True
+    dias: int = Field(7, ge=1, le=30)
+    max_noticias: int = Field(25, ge=1, le=60)
+    modelo: str = "claude-opus-5-5"
+    esfuerzo: Literal["low", "medium", "high"] = "low"
+    peso_en_senal: float = Field(0.3, ge=0, le=1)
+    vida_media_dias: float = Field(2.0, gt=0)
+    nombres: dict[str, str] = Field(default_factory=dict)
+    idiomas: dict[str, Literal["es", "pt", "en"]] = Field(default_factory=dict)
+    sec_contacto: str = ""
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -59,12 +74,17 @@ class ConfigRutas(BaseModel):
 
     base_de_datos: str = "data/monitor.db"
     historico: str = "data/historico"
+    nombres: str = "data/nombres.json"
     graficos: str = "data/graficos"
     logs: str = "logs"
 
     def ruta_historico(self) -> Path:
         """Carpeta de los CSV de precios históricos."""
         return _absoluta(self.historico)
+
+    def ruta_nombres(self) -> Path:
+        """Archivo con los nombres de empresa ya resueltos."""
+        return _absoluta(self.nombres)
 
     def ruta_graficos(self) -> Path:
         """Carpeta de los gráficos generados."""
@@ -88,6 +108,7 @@ class Configuracion(BaseModel):
     alertas: ConfigAlertas = Field(default_factory=ConfigAlertas)
     monedas: ConfigMonedas = Field(default_factory=ConfigMonedas)
     tecnico: ConfigTecnico = Field(default_factory=ConfigTecnico)
+    noticias: ConfigNoticias = Field(default_factory=ConfigNoticias)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 
@@ -111,6 +132,10 @@ class Secretos(BaseSettings):
 
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: int | None = None
+    anthropic_api_key: SecretStr | None = None
+    finnhub_api_key: SecretStr | None = None
+    marketaux_api_key: SecretStr | None = None
+    newsapi_key: SecretStr | None = None
 
     @property
     def telegram_configurado(self) -> bool:

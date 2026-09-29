@@ -147,6 +147,51 @@ tecnico:
   # Ruedas que se muestran en el gráfico (~180 = 9 meses).
   ruedas_grafico: 180
 
+noticias:
+  habilitado: true
+  # Días hacia atrás que se buscan noticias.
+  dias: 7
+  # Máximo de titulares por activo que se clasifican (controla el costo).
+  max_noticias: 25
+  # Modelo de Claude que clasifica el sentimiento y nivel de razonamiento.
+  # "low" alcanza para clasificar titulares y es lo más barato.
+  modelo: claude-opus-5-5
+  esfuerzo: low
+  # Peso máximo de las noticias en la señal final (el resto es análisis técnico).
+  peso_en_senal: 0.3
+  # Una noticia de hace "vida_media_dias" pesa la mitad que una de hoy.
+  vida_media_dias: 2
+  # Nombre con el que se busca cada empresa (si no está, se toma de Yahoo).
+  nombres:
+    ALUA.BA: Aluar
+    GGAL: Grupo Financiero Galicia
+    BMA: Banco Macro
+    YPF: YPF
+    PETR4.SA: Petrobras
+    PBR: Petrobras
+    BBDC4.SA: Bradesco
+    XP: XP Inc
+    VOW3.DE: Volkswagen
+    BARC.L: Barclays
+    BRK-B: Berkshire Hathaway
+    MELI: Mercado Libre
+    GLOB: Globant
+    GOOGL: Alphabet
+    GOOG: Alphabet
+    META: Meta Platforms
+    B: Barrick
+  # Idioma de búsqueda en Google News: es (medios argentinos), pt (brasileños), en.
+  # Por defecto: .BA -> es, .SA -> pt, el resto -> en.
+  idiomas:
+    GGAL: es
+    BMA: es
+    YPF: es
+    PBR: pt
+    XP: pt
+  # Mail de contacto que exige la SEC para consultar EDGAR (hechos relevantes 8-K
+  # de empresas de EE.UU.). Vacío = EDGAR desactivado.
+  sec_contacto: ""
+
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).
   canal: telegram

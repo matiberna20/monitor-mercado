@@ -27,8 +27,8 @@ def _barra(voto: float) -> str:
     return "· "
 
 
-def reporte_completo(a: Analisis) -> str:
-    """Reporte detallado de un activo."""
+def reporte_completo(a: Analisis, con_pie: bool = True) -> str:
+    """Reporte técnico detallado de un activo."""
     u = a.ultimo
     s = a.senal
     lineas = [
@@ -56,7 +56,7 @@ def reporte_completo(a: Analisis) -> str:
     lineas.append(f"  Volatilidad diaria (ATR): {numero(u['atr14'])} ({atr_pct}% del precio)")
 
     if a.patrones:
-        lineas += ["", f"Patrones recientes (últimas ruedas):"]
+        lineas += ["", "Patrones recientes (últimas ruedas):"]
         for p in a.patrones:
             sesgo = {1: "alcista", -1: "bajista", 0: "neutro"}[p.definicion.sesgo]
             lineas.append(f"• {p.fecha:%d/%m} {p.definicion.nombre} ({sesgo}): {p.definicion.descripcion}")
@@ -64,9 +64,9 @@ def reporte_completo(a: Analisis) -> str:
     lineas += [
         "",
         "La confianza mide cuánto coinciden los indicadores, no la probabilidad de acierto. "
-        "El análisis técnico mira solo precios pasados: no incluye noticias ni resultados.",
+        "El análisis técnico mira solo precios pasados.",
     ]
-    return "\n".join(lineas) + pie_de_mensaje()
+    return "\n".join(lineas) + (pie_de_mensaje() if con_pie else "")
 
 
 def linea_resumen(a: Analisis) -> str:

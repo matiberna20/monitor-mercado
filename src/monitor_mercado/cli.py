@@ -15,57 +15,32 @@ from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date, timedelta
 
 import typer
 
 from monitor_mercado.alertas.modelos import Moneda
 from monitor_mercado.alertas.parser import AYUDA_FORMATO, ErrorFormato, parsear_alerta
-from monitor_mercado.alertas.repositorio import RepositorioAlertas, crear_motor
-from monitor_mercado.alertas.servicio import ServicioAlertas
+from monitor_mercado.aplicacion import Contexto, armar_contexto
 from monitor_mercado.aviso_legal import pie_de_mensaje
-from monitor_mercado.configuracion import Configuracion, Secretos, cargar_configuracion, cargar_secretos
 from monitor_mercado.datos.modelos import ErrorDatos
-from monitor_mercado.datos.yahoo import ProveedorYahoo
+from monitor_mercado.explicacion import explicacion_completa, texto_glosario
+from monitor_mercado.noticias.reporte import linea_senal_final, reporte_noticias
 from monitor_mercado.notificaciones import formato
 from monitor_mercado.notificaciones.envio import ErrorTelegram, enviar_mensaje
-from monitor_mercado.registro import configurar_logs
 from monitor_mercado.tecnico.grafico import generar_grafico
-from monitor_mercado.tecnico.historico import AlmacenHistorico, FuenteYahoo
 from monitor_mercado.tecnico.reporte import reporte_completo, reporte_resumen
-from monitor_mercado.tecnico.servicio import ServicioTecnico
 
 app = typer.Typer(help="Monitor de mercado: alertas de precio por Telegram.", no_args_is_help=True)
 log = logging.getLogger(__name__)
-
-
-@dataclass
-class Contexto:
-    """Objetos compartidos por todos los comandos."""
-
-    cfg: Configuracion
-    secretos: Secretos
-    proveedor: ProveedorYahoo
-    servicio: ServicioAlertas
-    tecnico: ServicioTecnico
 
 
 def _contexto() -> Contexto:
     # La consola de Windows no siempre usa UTF-8: sin esto, los emojis rompen el print.
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    cfg = cargar_configuracion()
-    configurar_logs(cfg.rutas.ruta_logs())
-    secretos = cargar_secretos()
-    proveedor = ProveedorYahoo()
-    repo = RepositorioAlertas(crear_motor(cfg.rutas.ruta_base_de_datos()))
-    almacen = AlmacenHistorico(
-        cfg.rutas.ruta_historico(), FuenteYahoo(), cfg.tecnico.anios_historia, cfg.tecnico.refresco_horas
-    )
-    return Contexto(
-        cfg, secretos, proveedor, ServicioAlertas(repo, proveedor, cfg), ServicioTecnico(almacen, cfg)
-    )
+    return armar_contexto()
 
 
 def _salir_con_error(mensaje: str) -> None:
@@ -189,17 +164,38 @@ def probar_telegram() -> None:
 def analizar(
     simbolo: str,
     grafico: bool = typer.Option(True, "--grafico/--sin-grafico", help="Generar el gráfico PNG."),
+    explicar: bool = typer.Option(True, "--explicar/--sin-explicar", help="Agregar el resumen para aprender."),
 ) -> None:
-    """Análisis técnico de un activo: indicadores, patrones y señal de tendencia."""
+    """Análisis completo: técnico, noticias, señal final y explicación."""
     ctx = _contexto()
     try:
-        analisis = ctx.tecnico.analizar(simbolo)
+        r = ctx.analisis_completo(simbolo)
     except ErrorDatos as e:
         _salir_con_error(f"No se pudo analizar: {e}")
-    typer.echo(reporte_completo(analisis))
+    typer.echo(reporte_completo(r.tecnico, con_pie=False))
+    if r.noticias is not None:
+        typer.echo("\n" + reporte_noticias(r.noticias, maximo=5, con_pie=False))
+    typer.echo("\n" + linea_senal_final(r.final) + pie_de_mensaje())
+    if explicar:
+        typer.echo("\n" + explicacion_completa(r.tecnico, r.noticias, r.final))
     if grafico:
-        ruta = generar_grafico(analisis, ctx.cfg.rutas.ruta_graficos(), ctx.cfg.tecnico.ruedas_grafico)
+        ruta = generar_grafico(r.tecnico, ctx.cfg.rutas.ruta_graficos(), ctx.cfg.tecnico.ruedas_grafico)
         typer.echo(f"\nGráfico: {ruta}")
+
+
+@app.command()
+def noticias(simbolo: str) -> None:
+    """Noticias recientes de un activo con su sentimiento."""
+    ctx = _contexto()
+    if ctx.noticias is None:
+        _salir_con_error("Las noticias están desactivadas en config.yaml (noticias.habilitado).")
+    typer.echo(reporte_noticias(ctx.noticias.analizar(simbolo)))
+
+
+@app.command()
+def glosario(termino: str | None = typer.Argument(None, help="Término a buscar (ej. rsi).")) -> None:
+    """Definiciones de los términos que usa el sistema."""
+    typer.echo(texto_glosario(termino))
 
 
 @app.command()
@@ -235,7 +231,7 @@ def bot() -> None:
 
     ctx = _contexto()
     try:
-        aplicacion = construir_bot(ctx.cfg, ctx.secretos, ctx.servicio, ctx.tecnico)
+        aplicacion = construir_bot(ctx)
     except RuntimeError as e:
         _salir_con_error(str(e))
     typer.echo("Bot corriendo. Cerrá esta ventana o apretá Ctrl+C para detenerlo.")

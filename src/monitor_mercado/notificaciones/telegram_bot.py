@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from telegram import BotCommand, Update
 from telegram.error import TelegramError
@@ -28,12 +29,15 @@ from monitor_mercado.alertas.modelos import Moneda
 from monitor_mercado.alertas.parser import AYUDA_FORMATO, ErrorFormato, parsear_alerta
 from monitor_mercado.alertas.servicio import ServicioAlertas
 from monitor_mercado.aviso_legal import pie_de_mensaje
-from monitor_mercado.configuracion import Configuracion, Secretos
 from monitor_mercado.datos.modelos import ErrorDatos
+from monitor_mercado.explicacion import explicacion_completa, texto_glosario
+from monitor_mercado.noticias.reporte import linea_senal_final, reporte_noticias
 from monitor_mercado.notificaciones import formato
 from monitor_mercado.tecnico.grafico import generar_grafico
 from monitor_mercado.tecnico.reporte import reporte_completo, reporte_resumen
-from monitor_mercado.tecnico.servicio import ServicioTecnico
+
+if TYPE_CHECKING:
+    from monitor_mercado.aplicacion import Contexto
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +50,8 @@ AYUDA = (
     "/revisar - revisa las alertas ahora (ignora el horario de mercado)\n"
     "/analisis SIMBOLO - análisis técnico con gráfico\n"
     "/resumen - tendencia de toda la watchlist (/resumen completa para los 89)\n"
+    "/noticias SIMBOLO - noticias recientes con su sentimiento\n"
+    "/glosario [TERMINO] - definiciones (ej. /glosario rsi)\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -57,6 +63,8 @@ COMANDOS_MENU = [
     BotCommand("revisar", "Revisar ahora"),
     BotCommand("analisis", "Análisis técnico de un activo"),
     BotCommand("resumen", "Tendencia de la watchlist"),
+    BotCommand("noticias", "Noticias con sentimiento"),
+    BotCommand("glosario", "Definiciones para aprender"),
     BotCommand("ayuda", "Ayuda"),
 ]
 
@@ -157,37 +165,63 @@ async def cmd_revisar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _responder(update, formato.mensaje_revision(disparos))
 
 
+def _ctx(context: ContextTypes.DEFAULT_TYPE) -> Contexto:
+    return context.application.bot_data["ctx"]
+
+
 async def cmd_analisis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/analisis SIMBOLO: reporte técnico con gráfico."""
+    """/analisis SIMBOLO: técnico + noticias + señal final + gráfico + explicación."""
     args = context.args or []
     if not args:
         await _responder(update, "Uso: /analisis SIMBOLO   (ej. /analisis GGAL)")
         return
-    tecnico: ServicioTecnico = context.application.bot_data["tecnico"]
-    cfg: Configuracion = context.application.bot_data["cfg"]
-    await _responder(update, f"Analizando {args[0].upper()}...")
+    ctx = _ctx(context)
+    await _responder(update, f"Analizando {args[0].upper()} (precios y noticias)...")
     try:
-        analisis = await asyncio.to_thread(tecnico.analizar, args[0])
+        r = await asyncio.to_thread(ctx.analisis_completo, args[0])
         ruta = await asyncio.to_thread(
-            generar_grafico, analisis, cfg.rutas.ruta_graficos(), cfg.tecnico.ruedas_grafico
+            generar_grafico, r.tecnico, ctx.cfg.rutas.ruta_graficos(), ctx.cfg.tecnico.ruedas_grafico
         )
     except ErrorDatos as e:
         await _responder(update, f"No se pudo analizar: {e}")
         return
-    await _responder(update, reporte_completo(analisis))
+    await _responder(update, reporte_completo(r.tecnico, con_pie=False) + "\n\n"
+                     + linea_senal_final(r.final) + pie_de_mensaje())
+    if r.noticias is not None:
+        await _responder(update, reporte_noticias(r.noticias, maximo=5, con_pie=False))
     if update.effective_message:
         with open(ruta, "rb") as imagen:
-            await update.effective_message.reply_photo(photo=imagen, caption=f"{analisis.simbolo} – gráfico técnico")
+            await update.effective_message.reply_photo(photo=imagen, caption=f"{r.tecnico.simbolo} – gráfico técnico")
+    await _responder(update, explicacion_completa(r.tecnico, r.noticias, r.final))
+
+
+async def cmd_noticias(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/noticias SIMBOLO: titulares recientes con su sentimiento."""
+    args = context.args or []
+    if not args:
+        await _responder(update, "Uso: /noticias SIMBOLO   (ej. /noticias YPF)")
+        return
+    ctx = _ctx(context)
+    if ctx.noticias is None:
+        await _responder(update, "Las noticias están desactivadas en config.yaml.")
+        return
+    await _responder(update, f"Buscando noticias de {args[0].upper()}...")
+    analisis = await asyncio.to_thread(ctx.noticias.analizar, args[0])
+    await _responder(update, reporte_noticias(analisis))
+
+
+async def cmd_glosario(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/glosario [TERMINO]: definiciones para aprender."""
+    await _responder(update, texto_glosario(" ".join(context.args or []) or None))
 
 
 async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/resumen: señal técnica de toda la watchlist activa."""
-    tecnico: ServicioTecnico = context.application.bot_data["tecnico"]
-    cfg: Configuracion = context.application.bot_data["cfg"]
+    ctx = _ctx(context)
     completa = bool(context.args) and context.args[0].lower() == "completa"
-    simbolos = cfg.watchlist_completa if completa else cfg.watchlist_activa
+    simbolos = ctx.cfg.watchlist_completa if completa else ctx.cfg.watchlist_activa
     await _responder(update, f"Analizando {len(simbolos)} activos, puede tardar un poco...")
-    analisis, errores = await asyncio.to_thread(tecnico.resumen, simbolos)
+    analisis, errores = await asyncio.to_thread(ctx.tecnico.resumen, simbolos)
     await _responder(update, reporte_resumen(analisis, errores))
 
 
@@ -235,21 +269,19 @@ async def _al_iniciar(app: Application) -> None:
     log.info("Bot iniciado como @%s", app.bot.username)
 
 
-def construir_bot(
-    cfg: Configuracion, secretos: Secretos, servicio: ServicioAlertas, tecnico: ServicioTecnico
-) -> Application:
+def construir_bot(ctx: Contexto) -> Application:
     """Arma la aplicación del bot con sus comandos y la revisión periódica.
 
     Si falta TELEGRAM_CHAT_ID, el bot arranca en "modo configuración": solo
     responde /chatid y /start, para que puedas averiguar tu ID.
     """
+    cfg, secretos = ctx.cfg, ctx.secretos
     if secretos.telegram_bot_token is None:
         raise RuntimeError("Falta TELEGRAM_BOT_TOKEN en el archivo .env (ver README).")
 
     app = ApplicationBuilder().token(secretos.telegram_bot_token.get_secret_value()).post_init(_al_iniciar).build()
-    app.bot_data["servicio"] = servicio
-    app.bot_data["tecnico"] = tecnico
-    app.bot_data["cfg"] = cfg
+    app.bot_data["servicio"] = ctx.servicio
+    app.bot_data["ctx"] = ctx
     app.add_handler(CommandHandler("chatid", cmd_chatid))
     app.add_error_handler(manejar_error)
 
@@ -269,6 +301,8 @@ def construir_bot(
         (["revisar"], cmd_revisar),
         (["analisis", "analizar"], cmd_analisis),
         (["resumen"], cmd_resumen),
+        (["noticias"], cmd_noticias),
+        (["glosario"], cmd_glosario),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

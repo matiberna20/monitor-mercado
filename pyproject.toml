@@ -18,6 +18,8 @@ dependencies = [
     "tenacity>=8.2",
     "httpx>=0.27",
     "matplotlib>=3.8",
+    "anthropic>=1.9",
+    "feedparser>=6.0",
     "tzdata",  # Windows no trae la base de husos horarios IANA; zoneinfo la necesita.
 ]
 

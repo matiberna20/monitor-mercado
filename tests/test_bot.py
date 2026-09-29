@@ -66,15 +66,28 @@ def test_analisis_manda_reporte_y_grafico(servicio, cfg, tmp_path, datos_ohlcv):
     from monitor_mercado.tecnico.servicio import ServicioTecnico
     from tests.test_historico_y_tecnico import FuenteFalsa
 
+    from monitor_mercado.aplicacion import Contexto
+    from monitor_mercado.configuracion import Secretos
+
     cfg.rutas.graficos = str(tmp_path / "graficos")
     tecnico = ServicioTecnico(AlmacenHistorico(tmp_path, FuenteFalsa({"AAPL": datos_ohlcv(300)})), cfg)
-    respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["aapl"], tecnico=tecnico, cfg=cfg)
-    assert respuestas[0] == "Analizando AAPL..."
-    assert "AAPL: tendencia" in respuestas[1] and "no es una recomendación" in respuestas[1]
+    ctx = Contexto(cfg, Secretos(_env_file=None), None, servicio, tecnico, noticias=None)
+    respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["aapl"], ctx=ctx)
+    assert respuestas[0].startswith("Analizando AAPL")
+    assert "AAPL: tendencia" in respuestas[1] and "Señal final (solo técnica)" in respuestas[1]
+    assert "no es una recomendación" in respuestas[1]
     assert respuestas[2].startswith("[foto")
+    assert "Explicación para aprender" in respuestas[3]
 
-    respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["NOEXISTE"], tecnico=tecnico, cfg=cfg)
+    respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["NOEXISTE"], ctx=ctx)
     assert "No se pudo analizar" in respuestas[-1]
+
+
+def test_glosario(servicio):
+    [r], _ = _llamar(bot.cmd_glosario, servicio, ["rsi"])
+    assert r.startswith("📖 RSI")
+    [r], _ = _llamar(bot.cmd_glosario, servicio, [])
+    assert "MACD" in r and "CCL" in r
 
 
 def test_revisar_manda_el_aviso_al_chat(servicio, proveedor):

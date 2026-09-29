@@ -7,38 +7,14 @@ seguro cuando el bot y la revisión periódica corren en hilos distintos.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from sqlalchemy import create_engine, select
+from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from monitor_mercado.alertas.modelos import Alerta, Base
+from monitor_mercado.alertas.modelos import Alerta
+from monitor_mercado.db import crear_motor
 
-
-def crear_motor(ruta: Path | str) -> Engine:
-    """Crea el motor SQLite y las tablas si no existen.
-
-    Args:
-        ruta: Ruta del archivo .db, o ":memory:" para una base temporal (tests).
-    """
-    if str(ruta) == ":memory:":
-        # Una base en memoria existe solo dentro de su conexión: StaticPool hace
-        # que todos los hilos compartan la misma, si no cada hilo vería otra vacía.
-        motor = create_engine(
-            "sqlite+pysqlite:///:memory:",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-    else:
-        Path(ruta).parent.mkdir(parents=True, exist_ok=True)
-        motor = create_engine(
-            f"sqlite+pysqlite:///{Path(ruta).as_posix()}",
-            connect_args={"check_same_thread": False},
-        )
-    Base.metadata.create_all(motor)
-    return motor
+__all__ = ["RepositorioAlertas", "crear_motor"]
 
 
 class RepositorioAlertas:

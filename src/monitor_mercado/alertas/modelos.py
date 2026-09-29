@@ -6,7 +6,9 @@ from datetime import datetime, timezone
 from enum import StrEnum
 
 from sqlalchemy import Enum, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
+
+from monitor_mercado.db import Base
 
 
 class Operacion(StrEnum):
@@ -44,10 +46,6 @@ def _ahora() -> datetime:
 def _enum(tipo: type[StrEnum]) -> Enum:
     # Guarda el valor ("compra") y no el nombre ("COMPRA"): la base queda legible.
     return Enum(tipo, native_enum=False, values_callable=lambda e: [m.value for m in e])
-
-
-class Base(DeclarativeBase):
-    """Base declarativa de SQLAlchemy."""
 
 
 class Alerta(Base):

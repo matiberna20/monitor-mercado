@@ -5,8 +5,8 @@ Sistema personal en Python para seguir activos financieros. Se construye por eta
 | Etapa | Contenido | Estado |
 |---|---|---|
 | 1 | Alertas de precio por Telegram | ✅ Lista |
-| 2 | Datos históricos y análisis técnico | ✅ Lista para probar |
-| 3 | Noticias con puntaje de sentimiento | Pendiente |
+| 2 | Datos históricos y análisis técnico | ✅ Lista |
+| 3 | Noticias con puntaje de sentimiento | ✅ Lista para probar |
 | 4 | Análisis de resultados de empresas | Pendiente |
 | 5 | Backtesting | Pendiente |
 
@@ -204,6 +204,70 @@ calcula para cada fecha. Un modelo de ML sería otra clase con los mismos métod
 
 ---
 
+## 4c. Noticias y sentimiento (Etapa 3)
+
+### Uso
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/noticias YPF` | `monitor noticias YPF` | Titulares de los últimos 7 días, cada uno con su sentimiento y explicación |
+| `/analisis YPF` | `monitor analizar YPF` | Suma las noticias y la **señal final** (técnico + noticias) al análisis |
+| `/glosario` · `/glosario rsi` | `monitor glosario rsi` | Definiciones de los términos, para aprender |
+
+`/analisis` termina con un **📘 resumen para aprender**. Explica qué es cada indicador y qué
+está diciendo hoy, con los números concretos. Lo generan reglas fijas: es gratis y funciona sin
+ninguna clave.
+
+### Fuentes
+
+| Fuente | Clave | Qué aporta |
+|---|---|---|
+| Yahoo Finance (RSS) | no | Titulares por ticker de EE.UU. |
+| Google News (RSS) | no | Búsqueda por nombre de empresa: medios argentinos (en español) para `.BA` y ADRs argentinos, brasileños (en portugués) para `.SA` |
+| SEC EDGAR | no, pero exige un mail de contacto | Hechos relevantes (8-K) de empresas de EE.UU. Se activa con `noticias.sec_contacto` en `config.yaml` |
+| Finnhub, Marketaux, NewsAPI | sí (planes gratuitos) | Más cobertura. Se activan solos al cargar la clave en el `.env` |
+
+No se scrapea ningún sitio (Bloomberg, Reuters, etc.): solo se usan feeds RSS públicos y APIs oficiales.
+
+### Activar el sentimiento con Claude (paso a paso)
+
+Sin clave, las noticias se muestran igual, pero sin puntaje y sin la señal final combinada.
+
+1. Entrá a **console.anthropic.com** y creá una cuenta.
+2. En **Billing**, cargá crédito. Es un servicio **pago por uso**: con unos pocos dólares alcanza
+   para mucho tiempo de uso personal (ver costos abajo).
+3. En **API Keys**, tocá **Create Key** y copiá la clave (empieza con `sk-ant-`).
+4. Abrí el `.env` con el Bloc de notas y pegala después de `ANTHROPIC_API_KEY=`. Guardá.
+5. Cerrá y volvé a abrir el bot.
+
+**Costo aproximado:** con el modelo `claude-opus-5-5` y esfuerzo `low`, clasificar los ~25
+titulares de un activo cuesta unos pocos centavos de dólar. **Cada noticia se clasifica una
+sola vez** y queda guardada: repetir `/noticias` o `/analisis` solo paga las noticias nuevas.
+Si querés gastar menos, podés cambiar `noticias.modelo` en `config.yaml` por uno más barato.
+
+### Cómo se calcula
+
+- Claude clasifica cada titular como **positivo, negativo o neutro** según su impacto
+  probable sobre el precio de *esa* empresa (una mala noticia para un competidor puede ser
+  buena). Para cada uno devuelve un puntaje (−1 a +1), una relevancia (0 a 1), el factor
+  que podría mover el precio y una explicación simple.
+- **Tono general** = promedio ponderado. Pesan más las noticias relevantes y las recientes:
+  una noticia de hace 2 días pesa la mitad que una de hoy.
+- **Señal final** = 70% técnica + 30% noticias, como máximo. Si hubo pocas noticias relevantes,
+  las noticias pesan menos. Si técnico y noticias se contradicen, **baja la confianza**.
+
+### Limitaciones de las noticias
+
+- El modelo de lenguaje **puede equivocarse** o malinterpretar un titular: leé la nota completa.
+- Solo lee **titulares y resúmenes**, no la nota entera.
+- Cuando te llega la noticia, muchas veces **el mercado ya la reflejó en el precio**. Por eso
+  pesa poco en la señal final.
+- Google News puede traer notas que mencionan a la empresa de pasada; la "relevancia"
+  intenta filtrarlas.
+- `/resumen` sigue siendo solo técnico, para no gastar en clasificar 10 u 89 activos juntos.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -251,6 +315,10 @@ creando software/
 │   ├── datos/               precios (yfinance) y conversión de monedas
 │   ├── alertas/             modelo, base SQLite, evaluador, parser, servicio
 │   ├── tecnico/             historial, indicadores, patrones, señal, reporte, gráfico
+│   ├── noticias/            fuentes RSS/API, sentimiento con Claude, agregado, reporte
+│   ├── senal_final.py       combina técnico + noticias
+│   ├── explicacion.py       resumen "para aprender" y glosario
+│   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)
 │   ├── notificaciones/      bot de Telegram y formato de mensajes
 │   └── cli.py               comandos de terminal
 ├── tests/                   tests automáticos (pytest)

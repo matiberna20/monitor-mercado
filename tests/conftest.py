@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from monitor_mercado.alertas.repositorio import RepositorioAlertas, crear_motor
@@ -37,6 +39,29 @@ class ProveedorFalso:
             except SimboloSinDatos:
                 pass
         return resultado
+
+
+@pytest.fixture
+def datos_ohlcv():
+    """Fábrica de precios diarios sintéticos: tendencia diaria + ruido aleatorio fijo."""
+
+    def fabricar(n: int, tendencia: float = 0.001, ruido: float = 0.01, semilla: int = 0) -> pd.DataFrame:
+        rng = np.random.default_rng(semilla)
+        cierre = 100 * np.exp(np.cumsum(tendencia + rng.normal(0, ruido, n)))
+        apertura = np.concatenate([[cierre[0]], cierre[:-1]])
+        extra = np.abs(rng.normal(0, ruido / 2, n)) * cierre
+        return pd.DataFrame(
+            {
+                "apertura": apertura,
+                "maximo": np.maximum(apertura, cierre) + extra,
+                "minimo": np.minimum(apertura, cierre) - extra,
+                "cierre": cierre,
+                "volumen": rng.integers(800_000, 1_200_000, n).astype(float),
+            },
+            index=pd.date_range("2024-01-01", periods=n, freq="B", name="fecha"),
+        )
+
+    return fabricar
 
 
 @pytest.fixture

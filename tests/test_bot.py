@@ -15,6 +15,9 @@ class MensajeFalso:
     async def reply_text(self, texto: str) -> None:
         self.respuestas.append(texto)
 
+    async def reply_photo(self, photo, caption: str) -> None:
+        self.respuestas.append(f"[foto {len(photo.read())} bytes] {caption}")
+
 
 class BotFalso:
     def __init__(self) -> None:
@@ -24,13 +27,13 @@ class BotFalso:
         self.enviados.append((chat_id, text))
 
 
-def _llamar(comando, servicio, args):
+def _llamar(comando, servicio, args, **bot_data):
     mensaje = MensajeFalso()
     update = SimpleNamespace(effective_message=mensaje, effective_chat=SimpleNamespace(id=CHAT))
     context = SimpleNamespace(
         args=args,
         bot=BotFalso(),
-        application=SimpleNamespace(bot_data={"servicio": servicio, "chat_id": CHAT}),
+        application=SimpleNamespace(bot_data={"servicio": servicio, "chat_id": CHAT, **bot_data}),
     )
     asyncio.run(comando(update, context))
     return mensaje.respuestas, context.bot.enviados
@@ -56,6 +59,22 @@ def test_errores_se_explican_al_usuario(servicio):
     assert "No se pudo crear" in r
     [r], _ = _llamar(bot.cmd_borrar, servicio, ["abc"])
     assert "Uso" in r
+
+
+def test_analisis_manda_reporte_y_grafico(servicio, cfg, tmp_path, datos_ohlcv):
+    from monitor_mercado.tecnico.historico import AlmacenHistorico
+    from monitor_mercado.tecnico.servicio import ServicioTecnico
+    from tests.test_historico_y_tecnico import FuenteFalsa
+
+    cfg.rutas.graficos = str(tmp_path / "graficos")
+    tecnico = ServicioTecnico(AlmacenHistorico(tmp_path, FuenteFalsa({"AAPL": datos_ohlcv(300)})), cfg)
+    respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["aapl"], tecnico=tecnico, cfg=cfg)
+    assert respuestas[0] == "Analizando AAPL..."
+    assert "AAPL: tendencia" in respuestas[1] and "no es una recomendación" in respuestas[1]
+    assert respuestas[2].startswith("[foto")
+
+    respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["NOEXISTE"], tecnico=tecnico, cfg=cfg)
+    assert "No se pudo analizar" in respuestas[-1]
 
 
 def test_revisar_manda_el_aviso_al_chat(servicio, proveedor):

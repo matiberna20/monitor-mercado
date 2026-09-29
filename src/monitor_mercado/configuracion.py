@@ -37,6 +37,17 @@ class ConfigMonedas(BaseModel):
     simbolos_byma: dict[str, str] = Field(default_factory=dict)
 
 
+class ConfigTecnico(BaseModel):
+    """Parámetros del análisis técnico (Etapa 2)."""
+
+    anios_historia: int = Field(10, ge=1, le=30)
+    refresco_horas: float = Field(6, gt=0)
+    ars_en_dolares_ccl: bool = True
+    umbral_tendencia: float = Field(0.2, gt=0, lt=1)
+    ruedas_patrones: int = Field(5, ge=1)
+    ruedas_grafico: int = Field(180, ge=30)
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -47,7 +58,17 @@ class ConfigRutas(BaseModel):
     """Rutas de archivos locales (relativas a la raíz del proyecto)."""
 
     base_de_datos: str = "data/monitor.db"
+    historico: str = "data/historico"
+    graficos: str = "data/graficos"
     logs: str = "logs"
+
+    def ruta_historico(self) -> Path:
+        """Carpeta de los CSV de precios históricos."""
+        return _absoluta(self.historico)
+
+    def ruta_graficos(self) -> Path:
+        """Carpeta de los gráficos generados."""
+        return _absoluta(self.graficos)
 
     def ruta_base_de_datos(self) -> Path:
         """Devuelve la ruta absoluta del archivo SQLite."""
@@ -66,6 +87,7 @@ class Configuracion(BaseModel):
     watchlist_completa: list[str] = Field(default_factory=list)
     alertas: ConfigAlertas = Field(default_factory=ConfigAlertas)
     monedas: ConfigMonedas = Field(default_factory=ConfigMonedas)
+    tecnico: ConfigTecnico = Field(default_factory=ConfigTecnico)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 

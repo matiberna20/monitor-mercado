@@ -31,6 +31,9 @@ from monitor_mercado.aviso_legal import pie_de_mensaje
 from monitor_mercado.configuracion import Configuracion, Secretos
 from monitor_mercado.datos.modelos import ErrorDatos
 from monitor_mercado.notificaciones import formato
+from monitor_mercado.tecnico.grafico import generar_grafico
+from monitor_mercado.tecnico.reporte import reporte_completo, reporte_resumen
+from monitor_mercado.tecnico.servicio import ServicioTecnico
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +44,8 @@ AYUDA = (
     "/borrar ID - borra una alerta\n"
     "/precio SIMBOLO [ars] - precio actual\n"
     "/revisar - revisa las alertas ahora (ignora el horario de mercado)\n"
+    "/analisis SIMBOLO - análisis técnico con gráfico\n"
+    "/resumen - tendencia de toda la watchlist (/resumen completa para los 89)\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -50,6 +55,8 @@ COMANDOS_MENU = [
     BotCommand("borrar", "Borrar una alerta"),
     BotCommand("precio", "Precio actual"),
     BotCommand("revisar", "Revisar ahora"),
+    BotCommand("analisis", "Análisis técnico de un activo"),
+    BotCommand("resumen", "Tendencia de la watchlist"),
     BotCommand("ayuda", "Ayuda"),
 ]
 
@@ -58,9 +65,30 @@ def _servicio(context: ContextTypes.DEFAULT_TYPE) -> ServicioAlertas:
     return context.application.bot_data["servicio"]
 
 
+LIMITE_TELEGRAM = 4000  # Telegram rechaza mensajes de más de 4096 caracteres
+
+
+def partir_mensaje(texto: str, limite: int = LIMITE_TELEGRAM) -> list[str]:
+    """Divide un texto largo en partes, cortando entre líneas."""
+    partes, actual = [], ""
+    for linea in texto.split("\n"):
+        while len(linea) > limite:  # línea gigante: se corta a la fuerza
+            partes.append(linea[:limite])
+            linea = linea[limite:]
+        if len(actual) + len(linea) + 1 > limite:
+            partes.append(actual)
+            actual = linea
+        else:
+            actual = f"{actual}\n{linea}" if actual else linea
+    if actual:
+        partes.append(actual)
+    return partes
+
+
 async def _responder(update: Update, texto: str) -> None:
     if update.effective_message:
-        await update.effective_message.reply_text(texto)
+        for parte in partir_mensaje(texto):
+            await update.effective_message.reply_text(parte)
 
 
 async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -129,6 +157,40 @@ async def cmd_revisar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _responder(update, formato.mensaje_revision(disparos))
 
 
+async def cmd_analisis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/analisis SIMBOLO: reporte técnico con gráfico."""
+    args = context.args or []
+    if not args:
+        await _responder(update, "Uso: /analisis SIMBOLO   (ej. /analisis GGAL)")
+        return
+    tecnico: ServicioTecnico = context.application.bot_data["tecnico"]
+    cfg: Configuracion = context.application.bot_data["cfg"]
+    await _responder(update, f"Analizando {args[0].upper()}...")
+    try:
+        analisis = await asyncio.to_thread(tecnico.analizar, args[0])
+        ruta = await asyncio.to_thread(
+            generar_grafico, analisis, cfg.rutas.ruta_graficos(), cfg.tecnico.ruedas_grafico
+        )
+    except ErrorDatos as e:
+        await _responder(update, f"No se pudo analizar: {e}")
+        return
+    await _responder(update, reporte_completo(analisis))
+    if update.effective_message:
+        with open(ruta, "rb") as imagen:
+            await update.effective_message.reply_photo(photo=imagen, caption=f"{analisis.simbolo} – gráfico técnico")
+
+
+async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/resumen: señal técnica de toda la watchlist activa."""
+    tecnico: ServicioTecnico = context.application.bot_data["tecnico"]
+    cfg: Configuracion = context.application.bot_data["cfg"]
+    completa = bool(context.args) and context.args[0].lower() == "completa"
+    simbolos = cfg.watchlist_completa if completa else cfg.watchlist_activa
+    await _responder(update, f"Analizando {len(simbolos)} activos, puede tardar un poco...")
+    analisis, errores = await asyncio.to_thread(tecnico.resumen, simbolos)
+    await _responder(update, reporte_resumen(analisis, errores))
+
+
 async def ignorar_desconocido(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Mensajes de chats no autorizados: no se responde, solo se registra."""
     chat = update.effective_chat
@@ -173,7 +235,9 @@ async def _al_iniciar(app: Application) -> None:
     log.info("Bot iniciado como @%s", app.bot.username)
 
 
-def construir_bot(cfg: Configuracion, secretos: Secretos, servicio: ServicioAlertas) -> Application:
+def construir_bot(
+    cfg: Configuracion, secretos: Secretos, servicio: ServicioAlertas, tecnico: ServicioTecnico
+) -> Application:
     """Arma la aplicación del bot con sus comandos y la revisión periódica.
 
     Si falta TELEGRAM_CHAT_ID, el bot arranca en "modo configuración": solo
@@ -184,6 +248,8 @@ def construir_bot(cfg: Configuracion, secretos: Secretos, servicio: ServicioAler
 
     app = ApplicationBuilder().token(secretos.telegram_bot_token.get_secret_value()).post_init(_al_iniciar).build()
     app.bot_data["servicio"] = servicio
+    app.bot_data["tecnico"] = tecnico
+    app.bot_data["cfg"] = cfg
     app.add_handler(CommandHandler("chatid", cmd_chatid))
     app.add_error_handler(manejar_error)
 
@@ -201,6 +267,8 @@ def construir_bot(cfg: Configuracion, secretos: Secretos, servicio: ServicioAler
         (["borrar"], cmd_borrar),
         (["precio"], cmd_precio),
         (["revisar"], cmd_revisar),
+        (["analisis", "analizar"], cmd_analisis),
+        (["resumen"], cmd_resumen),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

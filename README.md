@@ -4,8 +4,8 @@ Sistema personal en Python para seguir activos financieros. Se construye por eta
 
 | Etapa | Contenido | Estado |
 |---|---|---|
-| 1 | Alertas de precio por Telegram | ✅ Lista para probar |
-| 2 | Datos históricos y análisis técnico | Pendiente |
+| 1 | Alertas de precio por Telegram | ✅ Lista |
+| 2 | Datos históricos y análisis técnico | ✅ Lista para probar |
 | 3 | Noticias con puntaje de sentimiento | Pendiente |
 | 4 | Análisis de resultados de empresas | Pendiente |
 | 5 | Backtesting | Pendiente |
@@ -155,6 +155,55 @@ TradingView.
 
 ---
 
+## 4b. Análisis técnico (Etapa 2)
+
+### Uso
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/analisis GGAL` | `monitor analizar GGAL` | Reporte completo y gráfico (medias, Bollinger, volumen, RSI, MACD) |
+| `/resumen` | `monitor resumen` | Tendencia de toda la watchlist activa, de más alcista a más bajista |
+| `/resumen completa` | `monitor resumen --completa` | Lo mismo para los 89 símbolos (tarda más) |
+| – | `monitor descargar [--completa]` | Descarga o actualiza el historial |
+
+Los gráficos quedan en `data/graficos/` y los precios históricos en `data/historico/`
+(un CSV por activo, que se puede abrir en Excel).
+
+### Cómo se calcula la señal
+
+1. **Datos:** precios diarios de 10 años, ajustados por splits y dividendos.
+   **Las acciones argentinas en pesos se pasan a dólares CCL**: en pesos casi todo "sube"
+   por la inflación, y eso no es tendencia de la empresa.
+2. **Indicadores:** medias móviles de 20/50/200, RSI 14, MACD (12/26/9), Bollinger (20, 2σ),
+   ATR, volumen relativo y rendimiento de 3 meses.
+3. **Votos:** cada indicador vota de −1 (bajista) a +1 (alcista). Las distancias se miden en
+   relación con la volatilidad de cada activo: un 5% es mucho para SPY y poco para NUGT.
+4. **Puntaje:** es el promedio ponderado de los votos. Con +0,2 o más la señal es **alcista**;
+   con −0,2 o menos, **bajista**; entre ambos valores, **neutral**.
+5. **Confianza (0–100):** mide cuánto coinciden los indicadores y si había datos
+   suficientes. **No es la probabilidad de que la señal acierte.** Eso lo mide el backtest
+   de la Etapa 5.
+
+**Patrones detectados** (en las últimas 5 ruedas): cruce dorado y cruce de la muerte, cruces
+del MACD, rupturas de máximos y mínimos de 20 días y de 52 semanas, cierres fuera de las bandas
+de Bollinger, compresión de volatilidad, velas envolventes, martillo, estrella fugaz y RSI extremo.
+
+**Listo para machine learning:** la tabla de votos (`tecnico/senal.py → caracteristicas`) se
+calcula para cada fecha. Un modelo de ML sería otra clase con los mismos métodos que
+`SenalPorReglas`, entrenada sobre esa tabla, sin cambiar el resto del sistema.
+
+### Limitaciones del análisis técnico
+
+- Mira **solo precios pasados**: no sabe de noticias, resultados ni contexto macro
+  (eso llega en las Etapas 3 y 4).
+- Durante la rueda, la última vela del día está incompleta y cambia hasta el cierre.
+- El CCL se calcula con GGAL. Si un día falta ese dato, se usa el del día hábil anterior.
+- Las reglas y sus pesos son supuestos razonables, **no están optimizados ni validados** todavía.
+  Hasta el backtest, tomá la señal como un resumen ordenado de los indicadores, no como
+  una predicción.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -201,6 +250,7 @@ creando software/
 │   ├── mercados.py          horarios de cada bolsa
 │   ├── datos/               precios (yfinance) y conversión de monedas
 │   ├── alertas/             modelo, base SQLite, evaluador, parser, servicio
+│   ├── tecnico/             historial, indicadores, patrones, señal, reporte, gráfico
 │   ├── notificaciones/      bot de Telegram y formato de mensajes
 │   └── cli.py               comandos de terminal
 ├── tests/                   tests automáticos (pytest)

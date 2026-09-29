@@ -31,6 +31,10 @@ from monitor_mercado.datos.yahoo import ProveedorYahoo
 from monitor_mercado.notificaciones import formato
 from monitor_mercado.notificaciones.envio import ErrorTelegram, enviar_mensaje
 from monitor_mercado.registro import configurar_logs
+from monitor_mercado.tecnico.grafico import generar_grafico
+from monitor_mercado.tecnico.historico import AlmacenHistorico, FuenteYahoo
+from monitor_mercado.tecnico.reporte import reporte_completo, reporte_resumen
+from monitor_mercado.tecnico.servicio import ServicioTecnico
 
 app = typer.Typer(help="Monitor de mercado: alertas de precio por Telegram.", no_args_is_help=True)
 log = logging.getLogger(__name__)
@@ -44,6 +48,7 @@ class Contexto:
     secretos: Secretos
     proveedor: ProveedorYahoo
     servicio: ServicioAlertas
+    tecnico: ServicioTecnico
 
 
 def _contexto() -> Contexto:
@@ -55,7 +60,12 @@ def _contexto() -> Contexto:
     secretos = cargar_secretos()
     proveedor = ProveedorYahoo()
     repo = RepositorioAlertas(crear_motor(cfg.rutas.ruta_base_de_datos()))
-    return Contexto(cfg, secretos, proveedor, ServicioAlertas(repo, proveedor, cfg))
+    almacen = AlmacenHistorico(
+        cfg.rutas.ruta_historico(), FuenteYahoo(), cfg.tecnico.anios_historia, cfg.tecnico.refresco_horas
+    )
+    return Contexto(
+        cfg, secretos, proveedor, ServicioAlertas(repo, proveedor, cfg), ServicioTecnico(almacen, cfg)
+    )
 
 
 def _salir_con_error(mensaje: str) -> None:
@@ -176,13 +186,56 @@ def probar_telegram() -> None:
 
 
 @app.command()
+def analizar(
+    simbolo: str,
+    grafico: bool = typer.Option(True, "--grafico/--sin-grafico", help="Generar el gráfico PNG."),
+) -> None:
+    """Análisis técnico de un activo: indicadores, patrones y señal de tendencia."""
+    ctx = _contexto()
+    try:
+        analisis = ctx.tecnico.analizar(simbolo)
+    except ErrorDatos as e:
+        _salir_con_error(f"No se pudo analizar: {e}")
+    typer.echo(reporte_completo(analisis))
+    if grafico:
+        ruta = generar_grafico(analisis, ctx.cfg.rutas.ruta_graficos(), ctx.cfg.tecnico.ruedas_grafico)
+        typer.echo(f"\nGráfico: {ruta}")
+
+
+@app.command()
+def resumen(
+    completa: bool = typer.Option(False, "--completa", help="Usar la watchlist completa."),
+) -> None:
+    """Señal técnica de todos los activos de la watchlist."""
+    ctx = _contexto()
+    simbolos = ctx.cfg.watchlist_completa if completa else ctx.cfg.watchlist_activa
+    analisis, errores = ctx.tecnico.resumen(simbolos)
+    typer.echo(reporte_resumen(analisis, errores))
+
+
+@app.command()
+def descargar(
+    completa: bool = typer.Option(False, "--completa", help="Usar la watchlist completa."),
+) -> None:
+    """Descarga o actualiza el historial de precios de la watchlist."""
+    ctx = _contexto()
+    simbolos = ctx.cfg.watchlist_completa if completa else ctx.cfg.watchlist_activa
+    m = ctx.cfg.monedas
+    simbolos = list(dict.fromkeys([*simbolos, m.ccl_accion_local, m.ccl_adr]))  # para el CCL
+    typer.echo(f"Descargando {len(simbolos)} símbolos (la primera vez tarda un poco)...\n")
+    for s, estado in ctx.tecnico.almacen.actualizar_varios(simbolos).items():
+        typer.echo(f"  {'✅' if estado.startswith('ok') else '❌'} {s:10} {estado}")
+    typer.echo(f"\nDatos guardados en: {ctx.tecnico.almacen.carpeta}")
+
+
+@app.command()
 def bot() -> None:
     """Arranca el bot y la revisión periódica (dejalo corriendo)."""
     from monitor_mercado.notificaciones.telegram_bot import construir_bot
 
     ctx = _contexto()
     try:
-        aplicacion = construir_bot(ctx.cfg, ctx.secretos, ctx.servicio)
+        aplicacion = construir_bot(ctx.cfg, ctx.secretos, ctx.servicio, ctx.tecnico)
     except RuntimeError as e:
         _salir_con_error(str(e))
     typer.echo("Bot corriendo. Cerrá esta ventana o apretá Ctrl+C para detenerlo.")

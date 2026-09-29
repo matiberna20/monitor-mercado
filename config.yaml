@@ -132,10 +132,27 @@ monedas:
   simbolos_byma:
     YPF: YPFD.BA
 
+tecnico:
+  # Años de historia diaria que se descargan la primera vez.
+  anios_historia: 10
+  # Horas antes de volver a actualizar el historial guardado.
+  refresco_horas: 6
+  # true = las acciones argentinas en pesos se analizan en dólares CCL, para que
+  # la inflación no parezca una tendencia alcista.
+  ars_en_dolares_ccl: true
+  # Puntaje (de -1 a 1) a partir del cual la señal deja de ser "neutral".
+  umbral_tendencia: 0.2
+  # Cuántas ruedas hacia atrás se buscan patrones (cruces, rupturas, velas).
+  ruedas_patrones: 5
+  # Ruedas que se muestran en el gráfico (~180 = 9 meses).
+  ruedas_grafico: 180
+
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).
   canal: telegram
 
 rutas:
   base_de_datos: data/monitor.db
+  historico: data/historico
+  graficos: data/graficos
   logs: logs

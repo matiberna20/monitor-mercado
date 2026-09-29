@@ -112,7 +112,7 @@ watchlist_completa:
 
 alertas:
   # Cada cuántos minutos se consultan los precios.
-  intervalo_minutos: 5
+  intervalo_minutos: 1
   # true = solo consulta cada activo mientras su bolsa está abierta.
   solo_en_horario_de_mercado: true
   # Minutos extra después del cierre (los datos gratis llegan con demora).

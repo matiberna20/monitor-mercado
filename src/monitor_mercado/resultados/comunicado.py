@@ -32,6 +32,11 @@ from monitor_mercado.noticias.sentimiento import ErrorSentimiento
 log = logging.getLogger(__name__)
 
 MAX_CARACTERES = 80_000  # ~20.000 tokens: alcanza para un comunicado completo
+MINIMO_CARACTERES = 1_500  # menos que esto es una carátula o un comunicado hecho de imágenes
+_PALABRAS_RESULTADOS = re.compile(
+    r"\b(results|resultados|quarter|trimestre|net income|ganancia neta|revenues?|ingresos|ebitda|earnings)\b",
+    re.IGNORECASE,
+)
 
 
 class ErrorComunicado(Exception):
@@ -98,6 +103,8 @@ class ClienteEdgar:
         cik = self.cik(simbolo)
         recientes = self._get(self.ENVIOS.format(cik=cik)).json()["filings"]["recent"]
         desde, hasta = fecha_resultados - timedelta(days=1), fecha_resultados + timedelta(days=4)
+        candidatos: list[tuple[int, Comunicado]] = []
+        sin_texto: str | None = None  # documento encontrado pero casi sin texto (escaneado)
         for i, formulario in enumerate(recientes["form"]):
             presentado = date.fromisoformat(recientes["filingDate"][i])
             if not desde <= presentado <= hasta:
@@ -109,16 +116,41 @@ class ClienteEdgar:
             nombre = self._elegir_documento(cik, acc, recientes["primaryDocument"][i])
             url = self.ARCHIVO.format(cik=cik, acc=acc, nombre=nombre)
             texto = html_a_texto(self._get(url).text)
-            if len(texto) > 500:
-                return Comunicado(formulario, presentado, url, texto[:MAX_CARACTERES])
+            if len(texto) < MINIMO_CARACTERES:
+                sin_texto = sin_texto or url
+                continue
+            doc = Comunicado(formulario, presentado, url, texto[:MAX_CARACTERES])
+            if es_8k:
+                return doc  # el 8-K ítem 2.02 es, por definición, el de resultados
+            candidatos.append((len(_PALABRAS_RESULTADOS.findall(texto[:20_000])), doc))
+        # Empresas extranjeras: pueden presentar varios 6-K esa semana (asambleas, dividendos...).
+        # Se elige el que más habla de resultados.
+        relevantes = [c for c in candidatos if c[0] >= 3]
+        if relevantes:
+            return max(relevantes, key=lambda c: (c[0], len(c[1].texto)))[1]
+        if sin_texto:
+            raise ErrorComunicado(f"El comunicado de {simbolo} está en imágenes y no se puede leer como texto "
+                                  f"(podés verlo en {sin_texto}).")
         raise ErrorComunicado(f"No se encontró el comunicado de {simbolo} cerca del {fecha_resultados:%d/%m/%Y}.")
 
     def _elegir_documento(self, cik: int, acc: str, principal: str) -> str:
-        """El anexo 99.1 (el comunicado de prensa) si existe; si no, el documento principal."""
+        """Documento que contiene el comunicado de prensa.
+
+        Orden de preferencia: anexo 99.1; un archivo cuyo nombre indique comunicado o
+        resultados (así lo presentan varias empresas extranjeras en el 6-K); el HTML más
+        grande que no sea la carátula; y por último el documento principal.
+        """
         items = self._get(self.INDICE.format(cik=cik, acc=acc)).json()["directory"]["item"]
-        anexos = [x for x in items if re.search(r"ex[-_]?99", x["name"].lower()) and x["name"].lower().endswith((".htm", ".html"))]
+        htmls = [x for x in items if x["name"].lower().endswith((".htm", ".html")) and "index" not in x["name"].lower()]
+        anexos = [x for x in htmls if re.search(r"ex[-_]?99", x["name"].lower())]
         if anexos:
             return sorted(anexos, key=lambda x: x["name"])[0]["name"]
+        por_nombre = [x for x in htmls if re.search(r"press|release|result|earning|comunicado", x["name"].lower())]
+        if por_nombre:
+            return por_nombre[0]["name"]
+        otros = [x for x in htmls if x["name"] != principal and "cover" not in x["name"].lower()]
+        if otros:
+            return max(otros, key=lambda x: int(x.get("size") or 0))["name"]
         return principal
 
 

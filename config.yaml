@@ -190,7 +190,7 @@ noticias:
     XP: pt
   # Mail de contacto que exige la SEC para consultar EDGAR (hechos relevantes 8-K
   # de empresas de EE.UU.). Vacío = EDGAR desactivado.
-  sec_contacto: ""
+  sec_contacto: "mati.berna20@gmail.com"
 
 resultados:
   # Empresas cuyos resultados seguís (te avisa antes y después de que presenten).
@@ -202,7 +202,7 @@ resultados:
   aviso_previo_horas: 36
   # Mail de contacto que exige la SEC para descargar comunicados (8-K / 6-K).
   # Vacío = no se analizan comunicados (no hay guidance ni tono).
-  sec_contacto: ""
+  sec_contacto: "mati.berna20@gmail.com"
   # Modelo de Claude que lee el comunicado ("medium": textos largos y más matices).
   modelo: claude-opus-5-5
   esfuerzo: medium

@@ -189,7 +189,7 @@ def _sec_falsa(peticion: httpx.Request) -> httpx.Response:
     if url.endswith("index.json"):
         return httpx.Response(200, json={"directory": {"item": [{"name": "aapl-8k.htm"}, {"name": "a8-kex991.htm"}]}})
     if url.endswith("a8-kex991.htm"):
-        return httpx.Response(200, text="<p>Apple reports third quarter results. " + "Revenue grew. " * 60 + "</p>")
+        return httpx.Response(200, text="<p>Apple reports third quarter results. " + "Revenue grew. " * 150 + "</p>")
     return httpx.Response(404)
 
 
@@ -201,6 +201,27 @@ def test_edgar_encuentra_el_anexo_99_1(tmp_path):
     assert doc.texto.startswith("Apple reports third quarter results")
     with pytest.raises(ErrorComunicado):
         ClienteEdgar("contacto@ejemplo.com", tmp_path / "ciks.json", http).buscar("MSFT", date(2026, 7, 30))
+
+
+def test_entre_varios_6k_elige_el_de_resultados(tmp_path):
+    def sec(peticion: httpx.Request) -> httpx.Response:
+        url = str(peticion.url)
+        if url.endswith("company_tickers.json"):
+            return httpx.Response(200, json={"0": {"cik_str": 1, "ticker": "YPF", "title": "YPF"}})
+        if "submissions" in url:
+            return httpx.Response(200, json={"filings": {"recent": {
+                "form": ["6-K", "6-K"], "filingDate": ["2026-08-11", "2026-08-11"],
+                "accessionNumber": ["a-1", "b-2"], "primaryDocument": ["asamblea.htm", "resultados.htm"]}}})
+        if url.endswith("index.json"):
+            nombre = "asamblea.htm" if "/a1/" in url else "resultados.htm"
+            return httpx.Response(200, json={"directory": {"item": [{"name": nombre, "size": 100}]}})
+        if url.endswith("asamblea.htm"):
+            return httpx.Response(200, text="<p>Convocatoria a asamblea de accionistas. " + "Orden del día. " * 200)
+        return httpx.Response(200, text="<p>YPF second quarter results. " + "Revenues and EBITDA grew. " * 100)
+
+    http = httpx.Client(transport=httpx.MockTransport(sec))
+    doc = ClienteEdgar("x@y.com", tmp_path / "c.json", http).buscar("YPF", date(2026, 8, 11))
+    assert doc.url.endswith("resultados.htm")
 
 
 def test_analizador_de_comunicado_con_cliente_falso():

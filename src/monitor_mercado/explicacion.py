@@ -182,8 +182,9 @@ def _noticias(n: AnalisisNoticias, final: SenalFinal | None) -> str:
     lineas = ["📰 Noticias"]
     if n.puntaje is None:
         if n.noticias:
-            lineas.append(f"Se encontraron {len(n.noticias)} titulares, pero no se pudo medir su sentimiento "
-                          "(falta la clave de Claude o falló la consulta), así que la señal final es solo técnica.")
+            lineas.append(f"Se encontraron {len(n.noticias)} titulares recientes. No se les asigna un puntaje "
+                          "automático, así que la señal final es solo técnica. Leelos: una noticia importante "
+                          "(resultados, cambios de regulación, fusiones) puede pesar más que cualquier indicador.")
         else:
             lineas.append("No se encontraron noticias recientes, así que la señal final es solo técnica.")
         return "\n".join(lineas)

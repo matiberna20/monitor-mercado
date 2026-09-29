@@ -180,7 +180,8 @@ def explicacion_resultados(r: ReporteResultados) -> str:
         "🔭 Guidance\n"
         "Son las proyecciones que da la propia empresa para los próximos meses. Suele mover el precio más que "
         "el trimestre que ya pasó, porque el mercado mira hacia adelante."
-        + ("" if r.comunicado else " (No se analizó el comunicado de esta presentación.)")
+        + ("" if r.comunicado else " El sistema no lee el comunicado automáticamente: buscá la sección "
+           "\"Outlook\" o \"Guidance\" en el link del comunicado oficial.")
     )
     if r.reacciones:
         x = r.reacciones[0]

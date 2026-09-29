@@ -167,16 +167,16 @@ class ServicioResultados:
         guardado = self.repo.comunicado(s, dia)
         if guardado is not None:
             return guardado[0], guardado[1]
-        if self._edgar is None or self._analizador is None:
-            falta = []
-            if self._edgar is None:
-                falta.append("un mail en resultados.sec_contacto (config.yaml)")
-            if self._analizador is None:
-                falta.append("ANTHROPIC_API_KEY en el .env")
-            avisos.append("Sin análisis del comunicado (guidance y tono): falta " + " y ".join(falta) + ".")
+        if self._edgar is None:
+            avisos.append("Sin comunicado oficial: falta un mail en resultados.sec_contacto (config.yaml).")
             return None, None
         try:
             doc = self._edgar.buscar(s, dia)
+            if self._analizador is None:
+                # Sin Claude: se da el link para que leas el comunicado (guidance incluida).
+                avisos.append(f"Comunicado oficial ({doc.formulario}): {doc.url} — ahí están la guidance y el "
+                              "detalle del trimestre.")
+                return None, None
             datos = {
                 "eps_reportado": ev.eps_reportado, "eps_consenso": ev.eps_estimado, "sorpresa_eps": s_eps,
                 "sorpresa_ingresos": s_ing,

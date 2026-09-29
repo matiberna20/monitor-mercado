@@ -284,7 +284,7 @@ def test_analisis_completo_con_consenso_guardado(tmp_path):
     assert r.reacciones[0].accion == pytest.approx(0.04)
     texto = reporte_resultados(r)
     assert "MEJOR DE LO ESPERADO" in texto and "no es una recomendación de inversión" in texto
-    assert "Sin análisis del comunicado" in texto  # sin SEC ni Claude se avisa qué falta
+    assert "Sin comunicado oficial: falta un mail" in texto  # sin contacto para la SEC se avisa qué falta
     assert "Explicación para aprender" in explicacion_resultados(r)
 
 

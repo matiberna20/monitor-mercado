@@ -149,6 +149,9 @@ tecnico:
 
 noticias:
   habilitado: true
+  # true = clasificar el sentimiento de cada titular con la API de Claude (servicio
+  # pago, requiere ANTHROPIC_API_KEY). false = solo se muestran los titulares.
+  usar_claude: false
   # Días hacia atrás que se buscan noticias.
   dias: 7
   # Máximo de titulares por activo que se clasifican (controla el costo).
@@ -203,6 +206,9 @@ resultados:
   # Mail de contacto que exige la SEC para descargar comunicados (8-K / 6-K).
   # Vacío = no se analizan comunicados (no hay guidance ni tono).
   sec_contacto: "mati.berna20@gmail.com"
+  # true = Claude lee el comunicado y detecta guidance y tono (pago, requiere
+  # ANTHROPIC_API_KEY). false = el reporte trae el link al comunicado para leerlo vos.
+  usar_claude: false
   # Modelo de Claude que lee el comunicado ("medium": textos largos y más matices).
   modelo: claude-opus-5-5
   esfuerzo: medium

@@ -94,7 +94,7 @@ def armar_contexto() -> Contexto:
     )
 
     cliente_claude = None
-    if secretos.anthropic_api_key:
+    if secretos.anthropic_api_key and (cfg.noticias.usar_claude or cfg.resultados.usar_claude):
         import anthropic
 
         cliente_claude = anthropic.Anthropic(api_key=secretos.anthropic_api_key.get_secret_value(), max_retries=3)
@@ -103,7 +103,8 @@ def armar_contexto() -> Contexto:
     noticias = None
     if cfg.noticias.habilitado:
         clasificador = (
-            ClasificadorClaude(cfg.noticias.modelo, cfg.noticias.esfuerzo, cliente_claude) if cliente_claude else None
+            ClasificadorClaude(cfg.noticias.modelo, cfg.noticias.esfuerzo, cliente_claude)
+            if cliente_claude and cfg.noticias.usar_claude else None
         )
         noticias = ServicioNoticias(
             armar_fuentes(cfg, secretos), clasificador, RepositorioNoticias(motor), nombres, cfg.noticias
@@ -124,7 +125,7 @@ def armar_contexto() -> Contexto:
         cfg,
         edgar=ClienteEdgar(contacto, cfg.rutas.ruta_ciks()) if contacto else None,
         analizador=AnalizadorComunicado(cliente_claude, cfg.resultados.modelo, cfg.resultados.esfuerzo)
-        if cliente_claude else None,
+        if cliente_claude and cfg.resultados.usar_claude else None,
     )
 
     return Contexto(

@@ -122,7 +122,7 @@ class ServicioNoticias:
             except ErrorSentimiento as e:
                 log.warning("%s: no se pudieron clasificar las noticias: %s", simbolo, e)
                 avisos.append(f"No se pudo calcular el sentimiento: {e}")
-        elif self.clasificador is None:
+        elif self.clasificador is None and self._cfg.usar_claude:
             avisos.append("Sentimiento desactivado: falta ANTHROPIC_API_KEY en el .env (ver README).")
 
         evaluadas = [

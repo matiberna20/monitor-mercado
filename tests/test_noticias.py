@@ -172,10 +172,17 @@ def test_cada_noticia_se_clasifica_una_sola_vez(tmp_path):
     assert r2.resumen == "Panorama positivo."
 
 
-def test_sin_clave_muestra_titulares_sin_puntaje(tmp_path):
+def test_sin_claude_muestra_titulares_sin_puntaje_ni_avisos(tmp_path):
     s = _servicio(tmp_path, [noticia("A")], None)
     r = s.analizar("AAPL", ahora=AHORA)
     assert r.puntaje is None and len(r.noticias) == 1
-    assert "ANTHROPIC_API_KEY" in r.avisos[0]
+    assert r.avisos == []  # desactivado a propósito: no se reclama la clave
     texto = reporte_noticias(r)
-    assert "sin clasificar" in texto and "no es una recomendación" in texto
+    assert "Titulares recientes" in texto and "no es una recomendación" in texto
+    assert "Claude" not in texto
+
+
+def test_si_se_pide_claude_sin_clave_se_avisa(tmp_path):
+    s = _servicio(tmp_path, [noticia("A")], None)
+    s._cfg = ConfigNoticias(usar_claude=True)
+    assert "ANTHROPIC_API_KEY" in s.analizar("AAPL", ahora=AHORA).avisos[0]

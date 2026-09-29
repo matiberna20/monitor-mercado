@@ -36,7 +36,7 @@ def reporte_noticias(n: AnalisisNoticias, maximo: int = 10, con_pie: bool = True
             lineas.append(f"{ICONO_SENT[c.sentimiento]} {fecha} {e.noticia.titulo}")
             lineas.append(f"   ↳ {c.factor}: {c.explicacion}")
     elif n.noticias:
-        lineas += ["", "Titulares (sin clasificar):"]
+        lineas += ["", "Titulares recientes:"]
         for e in n.noticias[:maximo]:
             lineas.append(f"• {e.noticia.publicada.astimezone(ZONA):%d/%m} {e.noticia.titulo}")
     else:
@@ -44,8 +44,12 @@ def reporte_noticias(n: AnalisisNoticias, maximo: int = 10, con_pie: bool = True
 
     for aviso in n.avisos:
         lineas += ["", f"ℹ️ {aviso}"]
-    lineas += ["", "La clasificación la hace un modelo de lenguaje (Claude) y puede equivocarse: "
-               "leé la noticia completa antes de decidir."]
+    if clasificadas:
+        lineas += ["", "La clasificación la hace un modelo de lenguaje (Claude) y puede equivocarse: "
+                   "leé la noticia completa antes de decidir."]
+    else:
+        lineas += ["", "Los titulares no tienen puntaje: leelos y sacá tus propias conclusiones. "
+                   "No todos hablan directamente de la empresa."]
     return "\n".join(lineas) + (pie_de_mensaje() if con_pie else "")
 
 

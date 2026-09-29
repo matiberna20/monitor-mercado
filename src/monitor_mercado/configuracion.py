@@ -52,6 +52,7 @@ class ConfigNoticias(BaseModel):
     """Parámetros de noticias y sentimiento (Etapa 3)."""
 
     habilitado: bool = True
+    usar_claude: bool = False  # clasificar el sentimiento con la API de Claude (pago)
     dias: int = Field(7, ge=1, le=30)
     max_noticias: int = Field(25, ge=1, le=60)
     modelo: str = "claude-opus-5-5"
@@ -71,6 +72,7 @@ class ConfigResultados(BaseModel):
     revision_horas: float = Field(2, gt=0)
     aviso_previo_horas: float = Field(36, gt=0)
     sec_contacto: str = ""
+    usar_claude: bool = False  # resumir el comunicado con la API de Claude (pago)
     modelo: str = "claude-opus-5-5"
     esfuerzo: Literal["low", "medium", "high"] = "medium"
 

@@ -11,3 +11,6 @@ __pycache__/
 # Datos locales y logs
 data/
 logs/
+
+# Paquetes para compartir (se regeneran con git archive)
+*.zip

@@ -92,6 +92,21 @@ class ConfigBacktest(BaseModel):
     repeticiones_bootstrap: int = Field(2000, ge=100)
 
 
+class ConfigCartera(BaseModel):
+    """Seguimiento de tu cartera real."""
+
+    archivo: str = "mi_cartera.csv"
+    resumen_diario: bool = True
+    hora_resumen: str = Field("16:20", pattern=r"^\d{1,2}:\d{2}$")  # hora de Nueva York
+    noticias_maximas: int = Field(8, ge=0, le=20)
+    concentracion_maxima: float = Field(0.25, gt=0, le=1)
+    umbral_movimiento: float = Field(0.05, gt=0)
+
+    def ruta(self) -> Path:
+        """Ruta absoluta del archivo de cartera."""
+        return _absoluta(self.archivo)
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -150,6 +165,7 @@ class Configuracion(BaseModel):
     noticias: ConfigNoticias = Field(default_factory=ConfigNoticias)
     resultados: ConfigResultados = Field(default_factory=ConfigResultados)
     backtest: ConfigBacktest = Field(default_factory=ConfigBacktest)
+    cartera: ConfigCartera = Field(default_factory=ConfigCartera)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 

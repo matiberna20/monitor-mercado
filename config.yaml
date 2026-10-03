@@ -183,6 +183,16 @@ noticias:
     GOOG: Alphabet
     META: Meta Platforms
     B: Barrick
+    TS: Tenaris
+    VIST: Vista Energy
+    NFLX: Netflix
+    # ETFs: se buscan noticias del tema que siguen, no del fondo en sí.
+    NUGT: gold miners
+    SLV: silver prices
+    GBTC: Bitcoin
+    BTC: Bitcoin
+    SPY: Wall Street
+    IWM: small caps
   # Idioma de búsqueda en Google News: es (medios argentinos), pt (brasileños), en.
   # Por defecto: .BA -> es, .SA -> pt, el resto -> en.
   idiomas:
@@ -239,6 +249,20 @@ backtest:
   permitir_corto: false
   # Días hacia adelante para medir si la señal "acertó" la dirección.
   horizonte_dias: 20
+
+cartera:
+  # Archivo con tus posiciones (no se sube a Git: es información personal).
+  archivo: mi_cartera.csv
+  # Resumen automático al cierre, por Telegram (con el bot abierto).
+  resumen_diario: true
+  # Hora del resumen, en hora de Nueva York (16:20 NY = 17:20 Argentina, 20 min después del cierre).
+  hora_resumen: "16:20"
+  # Cuántas noticias importantes incluir como máximo.
+  noticias_maximas: 8
+  # Avisa si una posición pesa más que esto en la cartera (0.25 = 25%).
+  concentracion_maxima: 0.25
+  # Destaca las acciones que se movieron más que esto en el día (0.05 = 5%).
+  umbral_movimiento: 0.05
 
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).

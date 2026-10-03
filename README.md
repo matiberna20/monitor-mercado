@@ -382,6 +382,57 @@ Sobre los 85 activos de la watchlist con al menos 4 años de historia, fuera de 
 
 ---
 
+## 4f. Tu cartera y el resumen de cierre
+
+### Uso
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/cartera` | `monitor cartera` | Cada posición: precio, variación del día, ganancia/pérdida desde la compra y peso en la cartera |
+| `/resumen_dia` | `monitor resumen-dia [--enviar]` | El resumen de cierre, a pedido |
+
+**Automático:** cada día hábil a las **16:20 de Nueva York (17:20 en Argentina)**, con el bot
+abierto, llega el resumen de cierre. Trae:
+- el valor de la cartera, el resultado del día y el resultado total desde la compra, en % y en US$;
+- la variación de los últimos 7 días (desde la segunda semana de uso);
+- las 3 mejores y las 3 peores del día, y los movimientos de más de 5%;
+- la variación del día de **todas** tus posiciones;
+- hasta 8 **noticias importantes** de tus empresas de las últimas 24 horas;
+- un aviso si una posición pesa más del 25% de la cartera.
+
+Los fines de semana y los feriados de Wall Street no se manda nada.
+
+### El archivo `mi_cartera.csv`
+
+Está en la carpeta del proyecto y **no se sube a Git**, porque es información personal. Se edita con
+Excel o con el Bloc de notas:
+
+```
+simbolo,cantidad,precio_compra,moneda,fecha_compra,nota
+AAPL,120,302.46,USD,,
+BTC,100,,USD,,costo no informado por el broker
+```
+
+- `precio_compra` es el precio **promedio** por acción. Si lo dejás vacío, la posición se sigue igual
+  pero no entra en la ganancia total.
+- Se aceptan los símbolos como los muestra el broker (`AAPL.E`, `BRK.B.E`).
+- `fecha_compra` (opcional, AAAA-MM-DD) queda guardada para futuras comparaciones.
+- Cuando compres o vendas, actualizá el archivo. Los cambios se toman en la siguiente consulta,
+  sin reiniciar el bot.
+
+### Cómo se eligen las noticias (sin IA)
+
+1. El titular tiene que nombrar a la empresa o su símbolo.
+2. Suman puntos las palabras que suelen mover precios: resultados, guidance, adquisición, demanda,
+   cambio de recomendación, dividendos, despidos…
+3. Tienen prioridad las acciones que más se movieron en el día.
+4. Máximo 2 noticias por empresa. En los ETFs se buscan noticias del tema que siguen (NUGT → mineras
+   de oro, SLV → plata, GBTC/BTC → bitcoin).
+
+Son reglas simples: pueden dejar afuera alguna noticia importante.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen

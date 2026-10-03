@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from monitor_mercado.alertas.repositorio import RepositorioAlertas
 from monitor_mercado.alertas.servicio import ServicioAlertas
 from monitor_mercado.backtest.servicio import ServicioBacktest
+from monitor_mercado.cartera.servicio import ServicioCartera
 from monitor_mercado.configuracion import Configuracion, Secretos, cargar_configuracion, cargar_secretos
 from monitor_mercado.datos.yahoo import ProveedorYahoo
 from monitor_mercado.db import crear_motor
@@ -52,6 +53,7 @@ class Contexto:
     noticias: ServicioNoticias | None
     resultados: ServicioResultados | None = None
     backtest: ServicioBacktest | None = None
+    cartera: ServicioCartera | None = None
 
     def analisis_completo(self, simbolo: str) -> AnalisisCompleto:
         """Análisis técnico + noticias + señal final.
@@ -140,4 +142,5 @@ def armar_contexto() -> Contexto:
         noticias=noticias,
         resultados=resultados,
         backtest=ServicioBacktest(tecnico, cfg),
+        cartera=ServicioCartera(cfg.cartera.ruta(), proveedor, cfg, motor, armar_fuentes(cfg, secretos), nombres),
     )

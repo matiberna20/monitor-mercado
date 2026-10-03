@@ -296,6 +296,35 @@ def backtest_watchlist(
 
 
 @app.command()
+def cartera() -> None:
+    """Estado de tu cartera: ganancia o pérdida de cada posición y del total."""
+    from monitor_mercado.cartera.reporte import texto_cartera
+
+    ctx = _contexto()
+    typer.echo(texto_cartera(ctx.cartera.estado()))
+
+
+@app.command("resumen-dia")
+def resumen_dia(
+    enviar: bool = typer.Option(False, "--enviar", help="Mandarlo también por Telegram."),
+    sin_noticias: bool = typer.Option(False, "--sin-noticias", help="Más rápido: sin buscar noticias."),
+) -> None:
+    """Resumen de cierre de tu cartera (el mismo que llega automáticamente)."""
+    from monitor_mercado.cartera.reporte import texto_resumen_dia
+
+    ctx = _contexto()
+    texto = texto_resumen_dia(ctx.cartera.resumen_dia(not sin_noticias), ctx.cfg.cartera.umbral_movimiento)
+    typer.echo(texto)
+    if enviar and ctx.secretos.telegram_configurado:
+        from monitor_mercado.notificaciones.telegram_bot import partir_mensaje
+
+        for parte in partir_mensaje(texto):
+            enviar_mensaje(ctx.secretos.telegram_bot_token.get_secret_value(),  # type: ignore[union-attr]
+                           ctx.secretos.telegram_chat_id, parte)  # type: ignore[arg-type]
+        typer.echo("\nEnviado por Telegram.")
+
+
+@app.command()
 def glosario(termino: str | None = typer.Argument(None, help="Término a buscar (ej. rsi).")) -> None:
     """Definiciones de los términos que usa el sistema."""
     typer.echo(texto_glosario(termino))

@@ -35,6 +35,7 @@ from monitor_mercado.noticias.reporte import linea_senal_final, reporte_noticias
 from monitor_mercado.backtest.reporte import (
     explicacion_backtest, grafico_backtest, reporte_backtest, resumen_backtests,
 )
+from monitor_mercado.cartera.reporte import texto_cartera, texto_resumen_dia
 from monitor_mercado.notificaciones import formato
 from monitor_mercado.resultados.reporte import (
     explicacion_resultados, mensaje_previo, reporte_resultados, texto_calendario,
@@ -63,10 +64,14 @@ AYUDA = (
     "/seguir SIMBOLO · /dejar SIMBOLO · /seguidas - empresas con aviso de resultados\n"
     "/backtest SIMBOLO - ¿la señal le gana a comprar y mantener? (10 años, con costos)\n"
     "/backtest_resumen [completa] - backtest de toda la watchlist\n"
+    "/cartera - ganancia o pérdida de cada posición de tu cartera\n"
+    "/resumen_dia - el resumen de cierre (llega solo cada día hábil a las 17:20 hora Argentina)\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
 COMANDOS_MENU = [
+    BotCommand("cartera", "Tu cartera: ganancias y pérdidas"),
+    BotCommand("resumen_dia", "Resumen de cierre de tu cartera"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -310,6 +315,52 @@ async def cmd_backtest_resumen(update: Update, context: ContextTypes.DEFAULT_TYP
     await _responder(update, resumen_backtests(resultados, errores))
 
 
+async def cmd_cartera(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/cartera: estado de tu cartera."""
+    ctx = _ctx(context)
+    await _responder(update, "Valuando tu cartera...")
+    estado = await asyncio.to_thread(ctx.cartera.estado)
+    await _responder(update, texto_cartera(estado))
+
+
+async def cmd_resumen_dia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/resumen_dia: el resumen de cierre, a pedido."""
+    ctx = _ctx(context)
+    await _responder(update, "Armando el resumen (precios y noticias de tus empresas)...")
+    resumen = await asyncio.to_thread(ctx.cartera.resumen_dia)
+    await _responder(update, texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento))
+
+
+def hubo_rueda_hoy(ctx: Contexto, hoy) -> bool:
+    """True si hoy operó Wall Street (descarta fines de semana y feriados)."""
+    if hoy.weekday() >= 5:
+        return False
+    try:
+        spy = ctx.tecnico.almacen.obtener("SPY", forzar=True)
+    except ErrorDatos:
+        return True  # ante la duda, se manda igual
+    return spy.index[-1].date() == hoy
+
+
+async def tarea_resumen_dia(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Tarea diaria al cierre: manda el resumen de la cartera."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    ctx = _ctx(context)
+    hoy = datetime.now(ZoneInfo("America/New_York")).date()
+    if not await asyncio.to_thread(hubo_rueda_hoy, ctx, hoy):
+        log.info("Hoy no hubo rueda: no se manda el resumen.")
+        return
+    try:
+        resumen = await asyncio.to_thread(ctx.cartera.resumen_dia)
+    except Exception:  # noqa: BLE001 - no debe tirar el bot
+        log.exception("Error armando el resumen diario")
+        return
+    for parte in partir_mensaje(texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento)):
+        await _enviar(context, context.application.bot_data["chat_id"], parte)
+
+
 async def tarea_resultados(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Tarea periódica: avisos de próximas presentaciones y análisis de las recién publicadas."""
     ctx = _ctx(context)
@@ -428,6 +479,8 @@ def construir_bot(ctx: Contexto) -> Application:
         (["seguidas"], cmd_seguidas),
         (["backtest"], cmd_backtest),
         (["backtest_resumen"], cmd_backtest_resumen),
+        (["cartera"], cmd_cartera),
+        (["resumen_dia"], cmd_resumen_dia),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))
@@ -440,5 +493,14 @@ def construir_bot(ctx: Contexto) -> Application:
         app.job_queue.run_repeating(tarea_resultados, interval=cfg.resultados.revision_horas * 3600, first=60,
                                     name="revisar_resultados")
         log.info("Calendario de resultados revisado cada %s horas.", cfg.resultados.revision_horas)
+    if ctx.cartera is not None and cfg.cartera.resumen_diario:
+        from datetime import time as hora
+        from zoneinfo import ZoneInfo
+
+        h, m = (int(x) for x in cfg.cartera.hora_resumen.split(":"))
+        # Corre todos los días; la tarea misma descarta fines de semana y feriados.
+        app.job_queue.run_daily(tarea_resumen_dia, time=hora(h, m, tzinfo=ZoneInfo("America/New_York")),
+                                name="resumen_cartera")
+        log.info("Resumen de cartera programado a las %s (hora de Nueva York).", cfg.cartera.hora_resumen)
     log.info("Revisión de alertas programada cada %d minutos.", cfg.alertas.intervalo_minutos)
     return app

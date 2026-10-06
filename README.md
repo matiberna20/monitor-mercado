@@ -430,7 +430,8 @@ Los fines de semana y los feriados de Wall Street no se manda nada.
 
 ### El archivo `mi_cartera.csv`
 
-Está en la carpeta del proyecto y **no se sube a Git**, porque es información personal. Se edita con
+Está en la carpeta del proyecto y **no se sube a Git**, porque es información personal. Si no
+existe (por ejemplo, en otra PC), copiá `mi_cartera.ejemplo.csv` como `mi_cartera.csv`. Se edita con
 Excel o con el Bloc de notas:
 
 ```

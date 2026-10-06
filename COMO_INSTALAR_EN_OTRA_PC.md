@@ -21,19 +21,24 @@ nada:** el código ya está hecho y probado. Solo hay que instalarlo y cargar la
 >    `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` (sección 2 del README). Nunca escribas las
 >    claves en el chat ni en otros archivos.
 > 6. Revisá `config.yaml`: los campos `sec_contacto` tienen un mail; preguntame si lo cambio.
-> 7. Probá el envío con `.\.venv\Scripts\monitor.exe probar-telegram` y después arrancá el bot
+> 7. Si no existe `mi_cartera.csv`, preguntame si quiero cargar mi cartera. Si digo que sí,
+>    copiá `mi_cartera.ejemplo.csv` como `mi_cartera.csv` y ayudame a reemplazar las filas de
+>    ejemplo (sección 4f del README). Sin ese archivo, todo lo demás funciona igual.
+> 8. Probá el envío con `.\.venv\Scripts\monitor.exe probar-telegram` y después arrancá el bot
 >    con `iniciar_monitor.bat`.
 
 ---
 
 ## Qué trae este paquete
 
-- `src/monitor_mercado/` — todo el código (5 etapas terminadas).
+- `src/monitor_mercado/` — todo el código (5 etapas terminadas, más cartera, lectura del
+  gráfico y buscador de símbolos).
 - `tests/` — tests automáticos.
 - `config.yaml` — configuración y watchlist.
 - `README.md` — manual completo: instalación, comandos de Telegram y terminal, cómo se calcula
   cada cosa y limitaciones.
 - `.env.example` — plantilla de las claves.
+- `mi_cartera.ejemplo.csv` — plantilla de la cartera.
 - `iniciar_monitor.bat` — arranque con doble clic.
 
 ## Qué NO trae (a propósito)
@@ -41,6 +46,7 @@ nada:** el código ya está hecho y probado. Solo hay que instalarlo y cargar la
 | Qué | Por qué | Qué hacer |
 |---|---|---|
 | `.env` | Tiene las claves (token de Telegram, API keys). Es secreto. | Crear uno nuevo desde `.env.example`, o pasar el `.env` por un medio privado (no por mail ni chats públicos) |
+| `mi_cartera.csv` | Tus posiciones: información financiera personal | Crearlo desde `mi_cartera.ejemplo.csv`, o copiar el de la PC original por un medio privado |
 | `.venv/` | El entorno de Python no se puede copiar entre PCs | Se crea con los pasos 2 y 3 |
 | `data/` | Base de datos con las alertas creadas, historial de precios y gráficos | Se crea sola. Si querés las mismas alertas, copiá la carpeta `data/` de la PC original |
 | `logs/` | Registros de esta PC | Se crea sola |
@@ -66,6 +72,10 @@ Opciones:
 4. **Etapa 4** — Resultados trimestrales vs. consenso, calendario con avisos, comunicado
    oficial (SEC EDGAR) y valuación vs. pares.
 5. **Etapa 5** — Backtesting con costos, walk-forward, bootstrap y poder predictivo.
+6. **Cartera** — Valuación de cada posición y resumen de cierre diario por Telegram con noticias.
+7. **Lectura del gráfico** — Estructura, soportes y resistencias, figuras, escenarios, velas
+   anotadas y validación histórica (`/grafico`).
+8. **Buscador de símbolos** — Acepta nombres de empresas y sugiere ante errores de tipeo.
 
 Hoy el análisis con Claude está **desactivado** (`usar_claude: false` en `config.yaml`), así que
 no hace falta `ANTHROPIC_API_KEY` para que todo funcione.

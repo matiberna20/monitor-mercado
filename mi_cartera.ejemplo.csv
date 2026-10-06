@@ -1,0 +1,3 @@
+simbolo,cantidad,precio_compra,moneda,fecha_compra,nota
+AAPL,10,180.50,USD,2025-03-15,ejemplo: borrá estas filas y cargá tus posiciones
+GGAL,25,,USD,,ejemplo sin precio de compra

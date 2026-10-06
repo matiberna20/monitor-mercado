@@ -157,6 +157,32 @@ TradingView.
 
 ## 4b. Análisis técnico (Etapa 2)
 
+### Lectura del gráfico "como un trader"
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/grafico GGAL` | `monitor grafico GGAL` | Lee el gráfico: estructura, soportes y resistencias, canal, figuras, volumen, escenarios y gráfico de velas anotado |
+| `/validar_grafico` | `monitor validar-grafico [--completa]` | Mide si esa lectura acertó la dirección en el pasado |
+
+Qué mira, en el orden en que lo haría un trader:
+1. **Giros (zigzag):** los máximos y mínimos que importan. El tamaño mínimo del movimiento se ajusta a
+   la volatilidad de cada acción.
+2. **Estructura (teoría de Dow):** máximos y mínimos más altos (alcista), más bajos (bajista) o
+   mezclados (lateral o compresión). Considera el tramo en curso solo si ya superó el extremo anterior.
+3. **Soportes y resistencias:** zonas donde el gráfico giró varias veces. Más toques, más fuerza.
+4. **Canal de tendencia:** pendiente mensual y si el precio está cerca del techo o del piso.
+5. **Figuras:** doble techo y doble piso, hombro-cabeza-hombro (normal e invertido), triángulos
+   ascendente, descendente y simétrico, rango y banderas. Cada una con su línea clave, el
+   **objetivo medido** y el **nivel que la invalida**. Se descartan las figuras que el precio ya anuló.
+6. **Rupturas** (con o sin volumen), **acumulación o distribución** y **divergencias del RSI**.
+7. **Síntesis:** lectura alcista, bajista o lateral con su convicción; escenario alcista, escenario
+   bajista y el nivel donde se anula la lectura.
+
+**⚠️ Resultado de la validación (10 activos, 10 años, 2.035 lecturas sin mirar el futuro):** la
+dirección de la lectura **no anticipó** el movimiento de las 4 semanas siguientes. Después de una
+lectura alcista el precio subió el 56% de las veces; después de una bajista, el 60%; en general, el 58%.
+Lo útil de la lectura es el **mapa de niveles**, no la predicción.
+
 ### Uso
 
 | Telegram | Terminal | Qué hace |

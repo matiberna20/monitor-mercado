@@ -16,6 +16,7 @@ from monitor_mercado.aviso_legal import pie_de_mensaje
 from monitor_mercado.noticias.servicio import AnalisisNoticias
 from monitor_mercado.notificaciones.formato import numero
 from monitor_mercado.senal_final import SenalFinal
+from monitor_mercado.tecnico.reporte_lectura import EXPLICACION_TRADER
 from monitor_mercado.tecnico.senal import Tendencia
 from monitor_mercado.tecnico.servicio import Analisis
 
@@ -254,6 +255,7 @@ def explicacion_completa(
     u = a.ultimo
     secciones = [
         f"📘 Explicación para aprender – {a.simbolo}",
+        EXPLICACION_TRADER,
         _idea_general(a),
         _medias(u),
         _rsi(u),

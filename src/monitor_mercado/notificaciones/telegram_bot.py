@@ -40,7 +40,8 @@ from monitor_mercado.notificaciones import formato
 from monitor_mercado.resultados.reporte import (
     explicacion_resultados, mensaje_previo, reporte_resultados, texto_calendario,
 )
-from monitor_mercado.tecnico.grafico import generar_grafico
+from monitor_mercado.tecnico.grafico_lectura import grafico_lectura
+from monitor_mercado.tecnico.reporte_lectura import texto_lectura
 from monitor_mercado.tecnico.reporte import reporte_completo, reporte_resumen
 
 if TYPE_CHECKING:
@@ -55,7 +56,9 @@ AYUDA = (
     "/borrar ID - borra una alerta\n"
     "/precio SIMBOLO [ars] - precio actual\n"
     "/revisar - revisa las alertas ahora (ignora el horario de mercado)\n"
-    "/analisis SIMBOLO - análisis técnico con gráfico\n"
+    "/grafico SIMBOLO - lectura del gráfico como un trader: tendencia, soportes, resistencias, figuras y escenarios\n"
+    "/analisis SIMBOLO - lo anterior + indicadores, noticias y explicación para aprender\n"
+    "/validar_grafico - ¿la lectura del gráfico acertó en el pasado?\n"
     "/resumen - tendencia de toda la watchlist (/resumen completa para los 89)\n"
     "/noticias SIMBOLO - noticias recientes con su sentimiento\n"
     "/glosario [TERMINO] - definiciones (ej. /glosario rsi)\n"
@@ -70,6 +73,7 @@ AYUDA = (
 )
 
 COMANDOS_MENU = [
+    BotCommand("grafico", "Lectura del gráfico como un trader"),
     BotCommand("cartera", "Tu cartera: ganancias y pérdidas"),
     BotCommand("resumen_dia", "Resumen de cierre de tu cartera"),
     BotCommand("alerta", "Crear una alerta"),
@@ -198,23 +202,49 @@ async def cmd_analisis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await _responder(update, "Uso: /analisis SIMBOLO   (ej. /analisis GGAL)")
         return
     ctx = _ctx(context)
-    await _responder(update, f"Analizando {args[0].upper()} (precios y noticias)...")
+    await _responder(update, f"Analizando {args[0].upper()} (gráfico, indicadores y noticias)...")
     try:
         r = await asyncio.to_thread(ctx.analisis_completo, args[0])
-        ruta = await asyncio.to_thread(
-            generar_grafico, r.tecnico, ctx.cfg.rutas.ruta_graficos(), ctx.cfg.tecnico.ruedas_grafico
-        )
     except ErrorDatos as e:
         await _responder(update, f"No se pudo analizar: {e}")
         return
-    await _responder(update, reporte_completo(r.tecnico, con_pie=False) + "\n\n"
+    # 1. Lo principal: la lectura del gráfico, como un trader, con el gráfico anotado.
+    await _enviar_lectura(update, ctx, r.tecnico)
+    # 2. El detalle de los indicadores y la señal final.
+    await _responder(update, "📊 Indicadores\n" + reporte_completo(r.tecnico, con_pie=False) + "\n\n"
                      + linea_senal_final(r.final) + pie_de_mensaje())
     if r.noticias is not None:
         await _responder(update, reporte_noticias(r.noticias, maximo=5, con_pie=False))
+    await _responder(update, explicacion_completa(r.tecnico, r.noticias, r.final))
+
+
+async def _enviar_lectura(update: Update, ctx: Contexto, analisis) -> None:
+    """Manda la lectura del gráfico y el gráfico de velas anotado."""
+    if analisis.lectura is None:
+        await _responder(update, "No se pudo leer el gráfico de este activo (historia insuficiente).")
+        return
+    await _responder(update, texto_lectura(analisis.simbolo, analisis.lectura, analisis.moneda))
+    ruta = await asyncio.to_thread(grafico_lectura, analisis.simbolo, analisis.lectura, analisis.moneda,
+                                   ctx.cfg.rutas.ruta_graficos())
     if update.effective_message:
         with open(ruta, "rb") as imagen:
-            await update.effective_message.reply_photo(photo=imagen, caption=f"{r.tecnico.simbolo} – gráfico técnico")
-    await _responder(update, explicacion_completa(r.tecnico, r.noticias, r.final))
+            await update.effective_message.reply_photo(photo=imagen, caption=f"{analisis.simbolo} – gráfico anotado")
+
+
+async def cmd_grafico(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/grafico SIMBOLO: solo la lectura del gráfico (más rápido que /analisis)."""
+    args = context.args or []
+    if not args:
+        await _responder(update, "Uso: /grafico SIMBOLO   (ej. /grafico GGAL)")
+        return
+    ctx = _ctx(context)
+    await _responder(update, f"Leyendo el gráfico de {args[0].upper()}...")
+    try:
+        analisis = await asyncio.to_thread(ctx.tecnico.analizar, args[0])
+    except ErrorDatos as e:
+        await _responder(update, f"No se pudo analizar: {e}")
+        return
+    await _enviar_lectura(update, ctx, analisis)
 
 
 async def cmd_noticias(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -303,6 +333,16 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         with open(ruta, "rb") as imagen:
             await update.effective_message.reply_photo(photo=imagen, caption=f"{r.simbolo} – señal vs. comprar y mantener")
     await _responder(update, explicacion_backtest(r))
+
+
+async def cmd_validar_grafico(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/validar_grafico: ¿la lectura del gráfico acierta? (sobre la watchlist activa)."""
+    from monitor_mercado.backtest.validar_lectura import texto_validacion, validar
+
+    ctx = _ctx(context)
+    await _responder(update, "Leyendo miles de gráficos del pasado, puede tardar un minuto...")
+    v = await asyncio.to_thread(validar, ctx.tecnico, ctx.cfg.watchlist_activa)
+    await _responder(update, texto_validacion(v))
 
 
 async def cmd_backtest_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -469,6 +509,8 @@ def construir_bot(ctx: Contexto) -> Application:
         (["precio"], cmd_precio),
         (["revisar"], cmd_revisar),
         (["analisis", "analizar"], cmd_analisis),
+        (["grafico"], cmd_grafico),
+        (["validar_grafico"], cmd_validar_grafico),
         (["resumen"], cmd_resumen),
         (["noticias"], cmd_noticias),
         (["glosario"], cmd_glosario),

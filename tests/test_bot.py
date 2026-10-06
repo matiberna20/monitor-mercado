@@ -74,10 +74,11 @@ def test_analisis_manda_reporte_y_grafico(servicio, cfg, tmp_path, datos_ohlcv):
     ctx = Contexto(cfg, Secretos(_env_file=None), None, servicio, tecnico, noticias=None)
     respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["aapl"], ctx=ctx)
     assert respuestas[0].startswith("Analizando AAPL")
-    assert "AAPL: tendencia" in respuestas[1] and "Señal final (solo técnica)" in respuestas[1]
-    assert "no es una recomendación" in respuestas[1]
-    assert respuestas[2].startswith("[foto")
-    assert "Explicación para aprender" in respuestas[3]
+    assert "lectura del gráfico" in respuestas[1] and "Soportes y resistencias" in respuestas[1]
+    assert respuestas[2].startswith("[foto") and "gráfico anotado" in respuestas[2]
+    assert "AAPL: tendencia" in respuestas[3] and "Señal final (solo técnica)" in respuestas[3]
+    assert "no es una recomendación" in respuestas[3]
+    assert "Explicación para aprender" in respuestas[4] and "Cómo lee un gráfico" in respuestas[4]
 
     respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["NOEXISTE"], ctx=ctx)
     assert "No se pudo analizar" in respuestas[-1]

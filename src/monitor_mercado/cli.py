@@ -30,6 +30,8 @@ from monitor_mercado.noticias.reporte import linea_senal_final, reporte_noticias
 from monitor_mercado.notificaciones import formato
 from monitor_mercado.notificaciones.envio import ErrorTelegram, enviar_mensaje
 from monitor_mercado.tecnico.grafico import generar_grafico
+from monitor_mercado.tecnico.grafico_lectura import grafico_lectura
+from monitor_mercado.tecnico.reporte_lectura import texto_lectura
 from monitor_mercado.tecnico.reporte import reporte_completo, reporte_resumen
 
 app = typer.Typer(help="Monitor de mercado: alertas de precio por Telegram.", no_args_is_help=True)
@@ -172,6 +174,8 @@ def analizar(
         r = ctx.analisis_completo(simbolo)
     except ErrorDatos as e:
         _salir_con_error(f"No se pudo analizar: {e}")
+    if r.tecnico.lectura is not None:
+        typer.echo(texto_lectura(r.tecnico.simbolo, r.tecnico.lectura, r.tecnico.moneda) + "\n")
     typer.echo(reporte_completo(r.tecnico, con_pie=False))
     if r.noticias is not None:
         typer.echo("\n" + reporte_noticias(r.noticias, maximo=5, con_pie=False))
@@ -180,7 +184,37 @@ def analizar(
         typer.echo("\n" + explicacion_completa(r.tecnico, r.noticias, r.final))
     if grafico:
         ruta = generar_grafico(r.tecnico, ctx.cfg.rutas.ruta_graficos(), ctx.cfg.tecnico.ruedas_grafico)
-        typer.echo(f"\nGráfico: {ruta}")
+        typer.echo(f"\nGráfico de indicadores: {ruta}")
+        if r.tecnico.lectura is not None:
+            ruta = grafico_lectura(r.tecnico.simbolo, r.tecnico.lectura, r.tecnico.moneda,
+                                   ctx.cfg.rutas.ruta_graficos())
+            typer.echo(f"Gráfico anotado (lectura del trader): {ruta}")
+
+
+@app.command("validar-grafico")
+def validar_grafico(
+    completa: bool = typer.Option(False, "--completa", help="Usar la watchlist completa (tarda más)."),
+) -> None:
+    """¿La lectura del gráfico anticipó la dirección del precio en el pasado?"""
+    from monitor_mercado.backtest.validar_lectura import texto_validacion, validar
+
+    ctx = _contexto()
+    simbolos = ctx.cfg.watchlist_completa if completa else ctx.cfg.watchlist_activa
+    typer.echo(texto_validacion(validar(ctx.tecnico, simbolos)))
+
+
+@app.command()
+def grafico(simbolo: str) -> None:
+    """Lectura del gráfico como un trader: tendencia, soportes, resistencias, figuras y escenarios."""
+    ctx = _contexto()
+    try:
+        a = ctx.tecnico.analizar(simbolo)
+    except ErrorDatos as e:
+        _salir_con_error(f"No se pudo analizar: {e}")
+    if a.lectura is None:
+        _salir_con_error("No se pudo leer el gráfico (historia insuficiente).")
+    typer.echo(texto_lectura(a.simbolo, a.lectura, a.moneda))
+    typer.echo(f"\nGráfico: {grafico_lectura(a.simbolo, a.lectura, a.moneda, ctx.cfg.rutas.ruta_graficos())}")
 
 
 @app.command()

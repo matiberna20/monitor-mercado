@@ -11,6 +11,7 @@ from monitor_mercado.configuracion import Configuracion
 from monitor_mercado.datos.modelos import ErrorDatos
 from monitor_mercado.tecnico.historico import AlmacenHistorico
 from monitor_mercado.tecnico.indicadores import calcular_indicadores
+from monitor_mercado.tecnico.lectura import LecturaGrafico, leer_grafico
 from monitor_mercado.tecnico.patrones import PatronDetectado, patrones_recientes
 from monitor_mercado.tecnico.senal import GeneradorSenal, Senal, SenalPorReglas
 
@@ -40,6 +41,7 @@ class Analisis:
     senal: Senal
     patrones: list[PatronDetectado]
     en_ccl: bool = False
+    lectura: LecturaGrafico | None = None  # lectura del gráfico "como un trader"
 
     @property
     def ultimo(self) -> pd.Series:
@@ -97,6 +99,11 @@ class ServicioTecnico:
         if len(df) < MINIMO_RUEDAS:
             raise ErrorDatos(f"{simbolo}: solo hay {len(df)} ruedas, se necesitan {MINIMO_RUEDAS}.")
         con_indicadores = calcular_indicadores(df)
+        try:
+            lectura = leer_grafico(con_indicadores)
+        except Exception:  # noqa: BLE001 - la lectura es un complemento: no debe frenar el análisis
+            log.exception("%s: no se pudo leer el gráfico", simbolo)
+            lectura = None
         return Analisis(
             simbolo=simbolo,
             moneda=moneda,
@@ -104,6 +111,7 @@ class ServicioTecnico:
             senal=self.generador.generar(con_indicadores),
             patrones=patrones_recientes(con_indicadores, self._cfg.tecnico.ruedas_patrones),
             en_ccl=en_ccl,
+            lectura=lectura,
         )
 
     def resumen(self, simbolos: list[str]) -> tuple[list[Analisis], dict[str, str]]:

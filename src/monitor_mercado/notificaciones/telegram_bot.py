@@ -29,7 +29,7 @@ from monitor_mercado.alertas.modelos import Moneda
 from monitor_mercado.alertas.parser import AYUDA_FORMATO, ErrorFormato, parsear_alerta
 from monitor_mercado.alertas.servicio import ServicioAlertas
 from monitor_mercado.aviso_legal import pie_de_mensaje
-from monitor_mercado.datos.modelos import ErrorDatos
+from monitor_mercado.datos.modelos import ErrorDatos, SimboloSinDatos
 from monitor_mercado.explicacion import explicacion_completa, texto_glosario
 from monitor_mercado.noticias.reporte import linea_senal_final, reporte_noticias
 from monitor_mercado.backtest.reporte import (
@@ -147,7 +147,7 @@ async def cmd_alerta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await _responder(update, str(e))
         return
     except (ValueError, ErrorDatos) as e:
-        await _responder(update, f"No se pudo crear la alerta: {e}")
+        await _responder(update, _error(context, (context.args or [""])[0], e, "No se pudo crear la alerta"))
         return
     await _responder(update, formato.mensaje_creada(resultado))
 
@@ -180,7 +180,7 @@ async def cmd_precio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         p = await asyncio.to_thread(_servicio(context).precio_en, args[0].upper(), moneda)
     except (ValueError, ErrorDatos) as e:
-        await _responder(update, f"No se pudo obtener el precio: {e}")
+        await _responder(update, _error(context, args[0], e, "No se pudo obtener el precio"))
         return
     await _responder(update, formato.detalle_precio(p) + pie_de_mensaje())
 
@@ -195,6 +195,27 @@ def _ctx(context: ContextTypes.DEFAULT_TYPE) -> Contexto:
     return context.application.bot_data["ctx"]
 
 
+def con_simbolo(funcion):
+    """Antes de ejecutar el comando, traduce el primer argumento a un símbolo ("nvidia" -> NVDA)."""
+
+    async def envoltura(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        ctx = context.application.bot_data.get("ctx")
+        if context.args and ctx is not None:
+            context.args[0] = ctx.buscador().resolver(context.args[0])
+        await funcion(update, context)
+
+    envoltura.__name__ = funcion.__name__
+    return envoltura
+
+
+def _error(context: ContextTypes.DEFAULT_TYPE, texto: str, e: Exception, prefijo: str) -> str:
+    """Mensaje de error; si el símbolo no existe, sugiere los parecidos."""
+    ctx = context.application.bot_data.get("ctx")
+    if isinstance(e, SimboloSinDatos) and ctx is not None:
+        return ctx.buscador().mensaje_no_encontrado(texto)
+    return f"{prefijo}: {e}"
+
+
 async def cmd_analisis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/analisis SIMBOLO: técnico + noticias + señal final + gráfico + explicación."""
     args = context.args or []
@@ -206,7 +227,7 @@ async def cmd_analisis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         r = await asyncio.to_thread(ctx.analisis_completo, args[0])
     except ErrorDatos as e:
-        await _responder(update, f"No se pudo analizar: {e}")
+        await _responder(update, _error(context, args[0], e, "No se pudo analizar"))
         return
     # 1. Lo principal: la lectura del gráfico, como un trader, con el gráfico anotado.
     await _enviar_lectura(update, ctx, r.tecnico)
@@ -242,7 +263,7 @@ async def cmd_grafico(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     try:
         analisis = await asyncio.to_thread(ctx.tecnico.analizar, args[0])
     except ErrorDatos as e:
-        await _responder(update, f"No se pudo analizar: {e}")
+        await _responder(update, _error(context, args[0], e, "No se pudo analizar"))
         return
     await _enviar_lectura(update, ctx, analisis)
 
@@ -273,7 +294,7 @@ async def cmd_resultados(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         r = await asyncio.to_thread(ctx.resultados.analizar, args[0])
     except ErrorDatos as e:
-        await _responder(update, f"No se pudo analizar: {e}")
+        await _responder(update, _error(context, args[0], e, "No se pudo analizar"))
         return
     await _responder(update, reporte_resultados(r))
     await _responder(update, explicacion_resultados(r))
@@ -293,7 +314,13 @@ async def cmd_seguir(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await _responder(update, "Uso: /seguir SIMBOLO")
         return
     s = context.args[0].upper()
-    nuevo = _ctx(context).resultados.repo.seguir(s)
+    ctx = _ctx(context)
+    try:  # se verifica que el símbolo exista antes de agregarlo
+        await asyncio.to_thread(ctx.proveedor.cotizacion, s)
+    except ErrorDatos as e:
+        await _responder(update, _error(context, s, e, "No se pudo verificar el símbolo"))
+        return
+    nuevo = ctx.resultados.repo.seguir(s)
     await _responder(update, f"Ahora seguís {s}: te aviso antes y después de que presente resultados."
                      if nuevo else f"Ya seguías {s}.")
 
@@ -326,7 +353,7 @@ async def cmd_backtest(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         r = await asyncio.to_thread(ctx.backtest.correr, args[0])
         ruta = await asyncio.to_thread(grafico_backtest, r, ctx.cfg.rutas.ruta_graficos())
     except ErrorDatos as e:
-        await _responder(update, f"No se pudo hacer el backtest: {e}")
+        await _responder(update, _error(context, args[0], e, "No se pudo hacer el backtest"))
         return
     await _responder(update, reporte_backtest(r))
     if update.effective_message:
@@ -503,23 +530,23 @@ def construir_bot(ctx: Contexto) -> Application:
     duenio = filters.Chat(chat_id=secretos.telegram_chat_id)
     for nombres, funcion in [
         (["start", "ayuda"], cmd_ayuda),
-        (["alerta"], cmd_alerta),
+        (["alerta"], con_simbolo(cmd_alerta)),
         (["alertas"], cmd_alertas),
         (["borrar"], cmd_borrar),
-        (["precio"], cmd_precio),
+        (["precio"], con_simbolo(cmd_precio)),
         (["revisar"], cmd_revisar),
-        (["analisis", "analizar"], cmd_analisis),
-        (["grafico"], cmd_grafico),
+        (["analisis", "analizar"], con_simbolo(cmd_analisis)),
+        (["grafico"], con_simbolo(cmd_grafico)),
         (["validar_grafico"], cmd_validar_grafico),
         (["resumen"], cmd_resumen),
-        (["noticias"], cmd_noticias),
+        (["noticias"], con_simbolo(cmd_noticias)),
         (["glosario"], cmd_glosario),
-        (["resultados"], cmd_resultados),
+        (["resultados"], con_simbolo(cmd_resultados)),
         (["calendario"], cmd_calendario),
-        (["seguir"], cmd_seguir),
-        (["dejar"], cmd_dejar),
+        (["seguir"], con_simbolo(cmd_seguir)),
+        (["dejar"], con_simbolo(cmd_dejar)),
         (["seguidas"], cmd_seguidas),
-        (["backtest"], cmd_backtest),
+        (["backtest"], con_simbolo(cmd_backtest)),
         (["backtest_resumen"], cmd_backtest_resumen),
         (["cartera"], cmd_cartera),
         (["resumen_dia"], cmd_resumen_dia),

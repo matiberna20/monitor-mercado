@@ -26,6 +26,7 @@ from monitor_mercado.resultados.repositorio import RepositorioResultados
 from monitor_mercado.resultados.servicio import ServicioResultados
 from monitor_mercado.resultados.valuacion import CacheInfo
 from monitor_mercado.senal_final import SenalFinal, combinar
+from monitor_mercado.simbolos import BuscadorSimbolos
 from monitor_mercado.tecnico.historico import AlmacenHistorico, FuenteYahoo
 from monitor_mercado.tecnico.servicio import Analisis, ServicioTecnico
 
@@ -54,6 +55,19 @@ class Contexto:
     resultados: ServicioResultados | None = None
     backtest: ServicioBacktest | None = None
     cartera: ServicioCartera | None = None
+    nombres: ResolutorNombres | None = None
+
+    def buscador(self) -> BuscadorSimbolos:
+        """Buscador con tu watchlist, tu cartera y las empresas que seguís (se arma al momento)."""
+        simbolos = list(self.cfg.watchlist_completa)
+        if self.cartera is not None:
+            try:
+                simbolos += [p.simbolo for p in self.cartera.posiciones()]
+            except Exception:  # noqa: BLE001 - un error en el archivo de cartera no impide buscar
+                log.warning("No se pudo leer la cartera para el buscador de símbolos")
+        if self.resultados is not None:
+            simbolos += self.resultados.repo.seguidas()
+        return BuscadorSimbolos(simbolos, self.nombres.conocidos() if self.nombres else {})
 
     def analisis_completo(self, simbolo: str) -> AnalisisCompleto:
         """Análisis técnico + noticias + señal final.
@@ -143,4 +157,5 @@ def armar_contexto() -> Contexto:
         resultados=resultados,
         backtest=ServicioBacktest(tecnico, cfg),
         cartera=ServicioCartera(cfg.cartera.ruta(), proveedor, cfg, motor, armar_fuentes(cfg, secretos), nombres),
+        nombres=nombres,
     )

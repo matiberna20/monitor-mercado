@@ -81,7 +81,7 @@ def test_analisis_manda_reporte_y_grafico(servicio, cfg, tmp_path, datos_ohlcv):
     assert "Explicación para aprender" in respuestas[4] and "Cómo lee un gráfico" in respuestas[4]
 
     respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["NOEXISTE"], ctx=ctx)
-    assert "No se pudo analizar" in respuestas[-1]
+    assert 'No encontré "NOEXISTE"' in respuestas[-1]  # mensaje claro, con ayuda para escribirlo bien
 
 
 def test_glosario(servicio):

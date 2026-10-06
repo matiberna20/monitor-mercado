@@ -47,6 +47,10 @@ class ResolutorNombres:
             except json.JSONDecodeError:
                 log.warning("No se pudo leer %s; se regenera.", archivo)
 
+    def conocidos(self) -> dict[str, str]:
+        """Todos los nombres ya resueltos (los de config.yaml tienen prioridad), sin consultar."""
+        return {**self._cache, **self._manuales}
+
     def nombre(self, simbolo: str) -> str:
         """Nombre para buscar noticias (el símbolo mismo si no se encuentra otro)."""
         simbolo = simbolo.upper()

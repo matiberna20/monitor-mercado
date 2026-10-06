@@ -261,6 +261,11 @@ def calendario() -> None:
 def seguir(simbolo: str) -> None:
     """Empezar a seguir los resultados de una empresa."""
     ctx = _contexto()
+    simbolo = ctx.buscador().resolver(simbolo)
+    try:  # se verifica que el símbolo exista antes de agregarlo
+        ctx.proveedor.cotizacion(simbolo)
+    except ErrorDatos:
+        _salir_con_error(ctx.buscador().mensaje_no_encontrado(simbolo))
     nuevo = ctx.resultados.repo.seguir(simbolo)
     typer.echo(f"Ahora seguís {simbolo.upper()}." if nuevo else f"Ya seguías {simbolo.upper()}.")
 

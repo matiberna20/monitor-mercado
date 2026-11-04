@@ -36,7 +36,9 @@ def test_descarga_inicial_e_incremental(tmp_path, datos_ohlcv):
     assert fuente.pedidos[-1][1] is None  # primera vez: toda la historia
 
     fuente.series["AAPL"] = df  # aparecen ruedas nuevas
-    actualizado = almacen.obtener("AAPL")
+    # forzar=True: no depender de la hora de modificación del archivo (con un refresco de milisegundos
+    # la prueba fallaba a veces según la resolución del reloj del sistema de archivos).
+    actualizado = almacen.obtener("AAPL", forzar=True)
     assert len(actualizado) == 300 and not actualizado.index.duplicated().any()
     assert fuente.pedidos[-1][1] is not None  # segunda vez: incremental
 

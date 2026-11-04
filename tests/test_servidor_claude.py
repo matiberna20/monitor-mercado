@@ -91,7 +91,8 @@ def test_todas_las_herramientas_estan_registradas():
                  "seguir_empresa", "dejar_de_seguir", "empresas_seguidas", "backtest", "backtest_watchlist",
                  "validar_grafico", "cartera", "cargar_cartera", "resumen_dia", "glosario", "crear_alerta",
                  "listar_alertas", "borrar_alerta", "revisar_alertas", "watchlist", "buscar_simbolo",
-                 "historial_precios", "datos_empresa", "estados_contables", "comparar_activos", "dolar_ccl"}
+                 "historial_precios", "datos_empresa", "estados_contables", "comparar_activos", "dolar_ccl",
+                 "fuerza_relativa", "panorama_mercado", "plan_de_riesgo"}
     assert esperadas <= nombres
 
 
@@ -141,6 +142,18 @@ def test_datos_empresa_y_estados(ctx):
     assert "3.20 T" in f and "+46.0%" in f and "Hace iPhones" in f
     e = texto(llamar("estados_contables", simbolo="AAPL"))
     assert "100.00 B" in e and "1.65" in e
+
+
+def test_fuerza_relativa_y_panorama(ctx):
+    fr = texto(llamar("fuerza_relativa", simbolo="NVDA", contra="AAPL"))
+    assert "Fuerza relativa de NVDA" in fr and "1 año" in fr
+    p = texto(llamar("panorama_mercado"))
+    assert "sin datos" in p  # los símbolos del panorama no están en los datos falsos: no rompe
+
+
+def test_plan_de_riesgo(ctx):
+    t = texto(llamar("plan_de_riesgo", simbolo="AAPL", capital=10000, riesgo_pct=1))
+    assert ("Stop" in t and "acciones" in t) or "mínimos del último año" in t
 
 
 def test_dolar_ccl(ctx):

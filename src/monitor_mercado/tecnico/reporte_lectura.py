@@ -33,7 +33,13 @@ def texto_lectura(simbolo: str, l: LecturaGrafico, moneda: str) -> str:
     if ult:
         lineas.append("Últimos giros: " + " → ".join(
             f"{'máx' if g.tipo == 'H' else 'mín'} {_p(g.precio)} ({g.fecha:%d/%m})" for g in ult))
+    e = l.extras
+    if e is not None:
+        lineas.append(e.grados.texto)
+        lineas.append(f"{e.regimen.texto}.")
     lineas.append(f"Medias móviles: {l.medias_texto}.")
+    if e is not None:
+        lineas.append(f"Gráfico semanal: {e.medias_semanales}; {e.regla_4_semanas}.")
 
     c = l.canal
     if c.claro:
@@ -45,15 +51,31 @@ def texto_lectura(simbolo: str, l: LecturaGrafico, moneda: str) -> str:
         lineas.append("No se mueve en un canal limpio: los últimos meses no siguen una línea recta clara.")
 
     lineas += ["", "🧱 Soportes y resistencias (zonas donde el precio giró antes)"]
+    def detalle(n) -> str:
+        extra = [f"{n.fuerza}, {n.toques} toque(s)"]
+        if n.volumen_alto:
+            extra.append("se formó con volumen alto")
+        rol = n.cambio_de_rol(l.precio)
+        if rol:
+            extra.append(rol)
+        return " · " + ", ".join(extra)
+
     for n in reversed(l.resistencias):
-        lineas.append(f"🔴 Resistencia {_p(n.precio)} ({_dist(n.precio, l.precio)}) · {n.fuerza}, {n.toques} toque(s)")
+        lineas.append(f"🔴 Resistencia {_p(n.precio)} ({_dist(n.precio, l.precio)}){detalle(n)}")
     lineas.append(f"▶️ Precio actual {_p(l.precio)}")
     for n in l.soportes:
-        lineas.append(f"🟢 Soporte {_p(n.precio)} ({_dist(n.precio, l.precio)}) · {n.fuerza}, {n.toques} toque(s)")
+        lineas.append(f"🟢 Soporte {_p(n.precio)} ({_dist(n.precio, l.precio)}){detalle(n)}")
     if not l.resistencias:
         lineas.append("(No hay resistencias arriba: el precio está en máximos del último año.)")
     if not l.soportes:
         lineas.append("(No hay soportes debajo: el precio está en mínimos del último año.)")
+    if e is not None:
+        lineas.append(e.redondos)
+        if e.retrocesos is not None:
+            lineas.append(e.retrocesos.texto)
+        if e.lineas:
+            lineas += ["", "📏 Líneas de tendencia"]
+            lineas += [x.texto for x in e.lineas]
 
     if l.figuras:
         lineas += ["", "📐 Figuras en el gráfico"]
@@ -75,6 +97,24 @@ def texto_lectura(simbolo: str, l: LecturaGrafico, moneda: str) -> str:
         lineas.append(f"Ruptura reciente: {l.ruptura_texto}.")
     if l.divergencia_texto:
         lineas.append(f"Atención: {l.divergencia_texto}.")
+    if e is not None:
+        if e.obv:
+            lineas.append(f"Atención: {e.obv}.")
+        lineas += ["", "🎚️ Osciladores (secundarios: se leen a favor de la tendencia)"]
+        lineas += e.osciladores.textos
+        senales = []
+        relevantes = [h for h in e.huecos if not h.cerrado or h.tipo in ("separación", "agotamiento")]
+        senales += [h.texto for h in relevantes[-3:]]
+        if e.isla:
+            senales.append(e.isla)
+        if e.giro_diario:
+            senales.append(f"{e.giro_diario[0].upper()}{e.giro_diario[1:]}.")
+        if e.giro_semanal:
+            senales.append(f"{e.giro_semanal[0].upper()}{e.giro_semanal[1:]}.")
+        senales += [v.texto for v in e.velas]
+        if senales:
+            lineas += ["", "🕯️ Señales de corto plazo (huecos, velas y días de giro)"]
+            lineas += senales
 
     lineas += ["", "🧭 Qué podría pasar"]
     base = {
@@ -104,6 +144,8 @@ def texto_lectura(simbolo: str, l: LecturaGrafico, moneda: str) -> str:
     else:
         lineas.append("Esperaría a que el precio salga del rango: comprar en el medio de un rango tiene poca "
                       "ventaja. La ruptura (con volumen) del techo o del piso marca hacia dónde ir.")
+    if e is not None and e.relacion_riesgo:
+        lineas.append(e.relacion_riesgo)
     lineas += [
         "",
         "⚠️ Importante: en la validación histórica (/validar_grafico), la dirección que marca esta lectura NO "

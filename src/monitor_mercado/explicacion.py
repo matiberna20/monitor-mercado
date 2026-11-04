@@ -312,6 +312,23 @@ GLOSARIO: dict[str, str] = {
     "pe": "Precio / ganancia por acción: cuántos años de ganancias actuales pagás al comprar.",
     "ev/ebitda": "Valor de la empresa (incluye deuda) sobre su EBITDA. Compara empresas con distinta deuda.",
     "interanual": "Comparación con el mismo período del año anterior (YoY). Elimina la estacionalidad.",
+    # Análisis técnico clásico (ver docs/LECTURA_TECNICA.md).
+    "linea de tendencia": "Recta que une mínimos cada vez más altos (o máximos cada vez más bajos). Dos puntos la trazan y un tercer toque la valida.",
+    "retroceso": "Corrección contra la tendencia. Suele devolver entre un tercio y dos tercios del tramo anterior (el 50% es lo más común).",
+    "fibonacci": "Retrocesos de 38,2% y 61,8% del último tramo, muy usados como zonas donde puede frenar una corrección.",
+    "hueco": "Gap: zona del gráfico donde no hubo operaciones entre dos días. Puede ser de separación, de escape o de agotamiento.",
+    "isla de giro": "Unas ruedas aisladas entre dos huecos en sentidos opuestos. Suele marcar un techo o un piso.",
+    "dia de giro": "Día que marca un máximo (o mínimo) nuevo pero cierra del otro lado del cierre anterior. Advierte un posible giro.",
+    "linea cuello": "Nivel que hay que romper para que una figura (doble techo, hombro-cabeza-hombro) quede confirmada.",
+    "cuna": "Figura con dos líneas que se juntan inclinadas. La que sube suele terminar bajando, y al revés.",
+    "obv": "Volumen acumulado: suma el volumen de los días de suba y resta el de los de baja. Si no acompaña al precio, es una alerta.",
+    "adx": "Indicador de 0 a 100 que mide si hay tendencia (no hacia dónde). Subiendo y arriba de 20: hay tendencia.",
+    "estocastico": "Oscilador de 0 a 100 que mide dónde cerró el precio dentro de su rango reciente. >80 sobrecompra, <20 sobreventa.",
+    "oscilacion fallida": "Señal del RSI: en sobrecompra hace un segundo pico más bajo y perfora el valle intermedio (o al revés en sobreventa).",
+    "fuerza relativa": "Precio de un activo dividido por el de otro (por ejemplo, el S&P 500). Si sube, el activo le gana.",
+    "amplitud": "Cuántas acciones acompañan la suba o la baja del índice. Una suba con pocas acciones es más frágil.",
+    "stop": "Precio en el que se acepta que la idea estaba equivocada y se sale. Va detrás de un soporte (o resistencia) válido.",
+    "relacion ganancia riesgo": "Cuánto se puede ganar por cada peso que se arriesga. La regla clásica pide al menos 3 a 1.",
 }
 
 

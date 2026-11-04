@@ -691,6 +691,203 @@ def dolar_ccl(dias: int = 30) -> str:
             f"({variacion} en {len(tabla)} ruedas)\n" + tabla.rename("ccl").to_csv())
 
 
+# ---------------------------------------------------------------------------
+# Análisis entre mercados, amplitud y gestión del riesgo (Murphy, caps. 16 a 18)
+# ---------------------------------------------------------------------------
+
+# Cap. 17: la cadena dólar → materias primas → bonos → acciones.
+PANORAMA = [
+    ("SPY", "S&P 500 (acciones de EE.UU.)"),
+    ("RSP", "S&P 500 con igual peso (la acción \"promedio\")"),
+    ("IWM", "Empresas chicas (Russell 2000)"),
+    ("QQQ", "Nasdaq 100 (tecnología)"),
+    ("TLT", "Bonos del Tesoro largos (suben cuando bajan las tasas)"),
+    ("^TNX", "Tasa del bono a 10 años (en %)"),
+    ("DX-Y.NYB", "Índice del dólar"),
+    ("GC=F", "Oro"),
+    ("CL=F", "Petróleo"),
+    ("DBC", "Canasta de materias primas"),
+]
+
+
+def _rendimientos(c: pd.Series) -> tuple[str, str, str]:
+    c = c.dropna()
+
+    def r(n: int) -> str:
+        return _pct(c.iloc[-1] / c.iloc[-n - 1] - 1) if len(c) > n else "-"
+
+    return r(21), r(63), r(252)
+
+
+@servidor.tool()
+def fuerza_relativa(simbolo: str, contra: str = "SPY", dias: int = 252) -> str:
+    """Fuerza relativa (cap. 17): el precio del activo dividido por el de otro (por defecto el S&P 500).
+    Si la línea sube, el activo le gana al otro. Sirve para elegir los sectores y acciones más fuertes.
+
+    Args:
+        simbolo: Activo a medir (símbolo o nombre).
+        contra: Contra qué compararlo: SPY (mercado), un ETF de sector (XLK, XLF, XLE...) u otra acción.
+        dias: Período a mirar.
+    """
+    ctx = contexto()
+    a, b = _simbolo(simbolo), _simbolo(contra)
+    try:
+        ca, ma, _ = ctx.tecnico.datos(a)
+        cb, mb, _ = ctx.tecnico.datos(b)
+    except ErrorDatos as e:
+        return _error(e)
+    linea = (ca["cierre"] / cb["cierre"]).dropna().tail(max(60, dias) + 1)
+    if len(linea) < 60:
+        return f"No hay suficiente historia en común entre {a} y {b}."
+    m50 = linea.rolling(50).mean()
+    r1, r3, r12 = _rendimientos(linea)
+    ultimo, previo = linea.iloc[-1], linea.iloc[-21]
+    tendencia = ("sube (le gana)" if linea.iloc[-1] > m50.iloc[-1] and m50.iloc[-1] > m50.iloc[-21]
+                 else "baja (le pierde)" if linea.iloc[-1] < m50.iloc[-1] and m50.iloc[-1] < m50.iloc[-21]
+                 else "sin dirección clara")
+    maximo = linea.max()
+    lineas = [
+        f"Fuerza relativa de {a} ({ma}) contra {b} ({mb}): la línea {a}/{b} {tendencia}.",
+        f"Variación de la línea: 1 mes {r1}, 3 meses {r3}, 1 año {r12} (positivo = {a} rindió más que {b}).",
+        f"La línea está {_pct(ultimo / maximo - 1)} respecto de su máximo del período."
+        + (" Está en máximos: el activo lidera." if ultimo >= maximo * 0.98 else ""),
+        "Cómo se usa (Murphy, cap. 17): de arriba hacia abajo — primero el mercado, después los sectores con la "
+        "línea subiendo, y dentro de ellos las acciones que le ganan a su sector. Una línea de fuerza relativa que "
+        "deja de subir es una alerta aunque el precio siga subiendo.",
+    ]
+    if ultimo < previo and ca["cierre"].iloc[-1] > ca["cierre"].iloc[-21]:
+        lineas.append(f"Ojo: {a} subió en el último mes pero menos que {b} (la línea bajó).")
+    return "\n".join(lineas)
+
+
+@servidor.tool()
+def panorama_mercado() -> str:
+    """Panorama entre mercados y amplitud (caps. 17 y 18): acciones, bonos, tasas, dólar, oro, petróleo y
+    materias primas, más cuántas acciones de la watchlist acompañan la tendencia."""
+    ctx = contexto()
+    filas = ["Activo | 1 mes | 3 meses | 1 año | tendencia (vs. media de 200)"]
+    cierres: dict[str, pd.Series] = {}
+    for s, nombre in PANORAMA:
+        try:
+            df, _, _ = ctx.tecnico.datos(s)
+        except ErrorDatos:
+            filas.append(f"{nombre} ({s}) | sin datos")
+            continue
+        c = df["cierre"]
+        cierres[s] = c
+        m200 = c.rolling(200).mean().iloc[-1]
+        tend = "alcista" if c.iloc[-1] > m200 else "bajista"
+        filas.append(f"{nombre} ({s}) | " + " | ".join(_rendimientos(c)) + f" | {tend}")
+
+    lectura = ["", "Relaciones clásicas (Murphy, cap. 17) para leer la tabla:",
+               "• Dólar y materias primas suelen ir al revés (el oro es el más sensible).",
+               "• Materias primas y bonos van al revés: materias primas en alza = presión inflacionaria = tasas "
+               "más altas.",
+               "• Bonos y acciones suelen ir juntos, y los bonos se adelantan: si los bonos hacen techo (las tasas "
+               "suben), es una alerta para las acciones. Excepción: en una deflación, bonos suben y acciones bajan.",
+               "• Confirmación (cap. 18): una suba es más sana si la acompañan el S&P con igual peso (RSP) y las "
+               "empresas chicas (IWM), no solo la tecnología."]
+    if "SPY" in cierres:
+        for s, txt, plural in (("RSP", "el S&P con igual peso", False), ("IWM", "las empresas chicas", True)):
+            if s in cierres:
+                rel = (cierres[s] / cierres["SPY"]).dropna()
+                if len(rel) > 63:
+                    cambio = rel.iloc[-1] / rel.iloc[-64] - 1
+                    verbo = ("le ganó", "le perdió") if not plural else ("le ganaron", "le perdieron")
+                    lectura.append(f"  → En 3 meses {txt} {verbo[0] if cambio > 0 else verbo[1]} al SPY "
+                                   f"({_pct(cambio)}): la suba {'se amplía' if cambio > 0 else 'se concentra en pocas'}"
+                                   f"{'' if cambio > 0 else ' acciones grandes'}.")
+
+    # Amplitud (cap. 18) aproximada con la watchlist: % sobre sus medias y máximos vs. mínimos de 52 semanas.
+    sobre50 = sobre200 = maximos = minimos = total = 0
+    for s in ctx.cfg.watchlist_completa:
+        if s.startswith("^"):
+            continue
+        try:
+            df, _, _ = ctx.tecnico.datos(s)
+        except ErrorDatos:
+            continue
+        c = df["cierre"]
+        if len(c) < 252:
+            continue
+        total += 1
+        sobre50 += c.iloc[-1] > c.rolling(50).mean().iloc[-1]
+        sobre200 += c.iloc[-1] > c.rolling(200).mean().iloc[-1]
+        maximos += df["maximo"].iloc[-5:].max() >= df["maximo"].iloc[-252:].max()
+        minimos += df["minimo"].iloc[-5:].min() <= df["minimo"].iloc[-252:].min()
+    if total:
+        lectura += ["", f"Amplitud de tu watchlist ({total} acciones, cap. 18):",
+                    f"• {sobre50 / total:.0%} está arriba de su media de 50 ruedas y {sobre200 / total:.0%} arriba "
+                    "de la de 200. Más de 70% suele ser mercado sobrecomprado; menos de 30%, sobrevendido.",
+                    f"• {maximos} marcaron un máximo de 52 semanas en la última semana y {minimos} un mínimo. Si el "
+                    "índice sube pero cada vez menos acciones hacen máximos, la suba se debilita."]
+    return "\n".join(filas + lectura)
+
+
+@servidor.tool()
+def plan_de_riesgo(simbolo: str, capital: float, riesgo_pct: float = 1.0, entrada: float | None = None) -> str:
+    """Gestión del riesgo (cap. 16): dónde iría el stop según el gráfico, cuántas acciones comprar para no
+    arriesgar más que un % del capital, y si la relación ganancia/riesgo llega al 3 a 1 que pide el libro.
+    Es un ejercicio educativo, no una recomendación.
+
+    Args:
+        simbolo: Símbolo o nombre de la empresa.
+        capital: Capital total de la cuenta (en la moneda del análisis).
+        riesgo_pct: Cuánto del capital se acepta perder si sale mal (el libro dice no más de 5%; muchos usan 1-2%).
+        entrada: Precio de entrada. Vacío = el precio actual.
+    """
+    ctx = contexto()
+    try:
+        a = ctx.tecnico.analizar(_simbolo(simbolo))
+    except ErrorDatos as e:
+        return _error(e)
+    l = a.lectura
+    if l is None:
+        return "No hay historia suficiente para leer el gráfico."
+    precio = entrada or l.precio
+    if not l.soportes:
+        return (f"{a.simbolo} está en mínimos del último año: no hay un soporte debajo para ubicar el stop. "
+                "Según el libro, sin un nivel claro que anule la idea no se puede medir el riesgo.")
+    soporte = l.soportes[0].precio
+    stop = soporte - 0.5 * float(l.datos["atr14"].iloc[-1])  # un poco debajo del soporte, fuera del "ruido"
+    riesgo_accion = precio - stop
+    if riesgo_accion <= 0:
+        return f"El precio de entrada ({_num(precio)}) ya está debajo del soporte: el gráfico no avala la compra."
+    perdida_max = capital * riesgo_pct / 100
+    por_riesgo = int(perdida_max // riesgo_accion)
+    por_tope = int(capital * 0.15 // precio)  # cap. 16: no más de 10-15% del capital en un solo activo
+    cantidad = min(por_riesgo, por_tope)
+    metas = [r.precio for r in l.resistencias if r.precio > precio]
+    metas += [f.objetivo for f in l.figuras if f.sesgo > 0 and f.objetivo and f.objetivo > precio]
+    meta = min(metas) if metas else None
+    lineas = [
+        f"Plan de riesgo para {a.simbolo} ({a.moneda}) — ejercicio educativo, no es una recomendación.",
+        f"• Entrada: {_num(precio)}. Stop: {_num(stop)} (medio día de volatilidad debajo del soporte de "
+        f"{_num(soporte)}; el libro pide ponerlo detrás de un soporte válido y evitar los números redondos).",
+        f"• Riesgo por acción: {_num(riesgo_accion)} ({riesgo_accion / precio:.1%}). Con un capital de "
+        f"{_num(capital, 0)} y {riesgo_pct:g}% de riesgo, la pérdida máxima aceptada es {_num(perdida_max)}: "
+        f"alcanzaría para {por_riesgo} acciones.",
+    ]
+    if por_tope < por_riesgo:
+        lineas.append(f"• Pero eso sería {por_riesgo * precio / capital:.0%} del capital en un solo activo, y el libro "
+                      f"sugiere no pasar de 10-15%: tope de {por_tope} acciones.")
+    lineas.append(f"• Cantidad sugerida por las reglas: {cantidad} acciones ({_num(cantidad * precio)}, "
+                  f"{cantidad * precio / capital:.0%} del capital); si toca el stop se pierden "
+                  f"{_num(cantidad * riesgo_accion)}.")
+    if meta:
+        rr = (meta - precio) / riesgo_accion
+        lineas.append(f"• Primera meta: {_num(meta)} ({meta / precio - 1:+.1%}). Relación ganancia/riesgo: "
+                      f"{rr:.1f} a 1 " + ("— cumple el mínimo de 3 a 1 del libro." if rr >= 3 else
+                                           "— no llega al 3 a 1 que pide el libro: un trader esperaría una "
+                                           "entrada más cerca del soporte."))
+    else:
+        lineas.append("• No hay resistencias arriba (máximos del año): la meta queda abierta; el libro sugiere "
+                      "ir subiendo el stop a medida que el precio avanza.")
+    lineas.append("Regla del libro: primero se ubica el stop según el gráfico y después se calcula la cantidad; "
+                  "nunca al revés. Después de una racha ganadora es cuando menos conviene agrandar posiciones.")
+    return "\n".join(lineas) + pie_de_mensaje()
+
+
 def main() -> None:
     """Punto de entrada: ``monitor-claude``."""
     # El protocolo usa stdout: cualquier print accidental lo rompería. Los logs van a stderr y al archivo.

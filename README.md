@@ -182,6 +182,23 @@ Qué mira, en el orden en que lo haría un trader:
 7. **Síntesis:** lectura alcista, bajista o lateral con su convicción; escenario alcista, escenario
    bajista y el nivel donde se anula la lectura.
 
+**Reglas del análisis técnico clásico (Murphy).** La lectura sigue los criterios de *Análisis técnico
+de los mercados financieros* de John J. Murphy (detalle en [`docs/LECTURA_TECNICA.md`](docs/LECTURA_TECNICA.md)):
+- Rupturas con **filtro**: hace falta un cierre 1% más allá del nivel, o dos cierres seguidos.
+- Figuras de giro que exigen una **tendencia previa**, una separación mínima de un mes entre techos o
+  pisos, y **volumen** en las rupturas al alza. El objetivo medido queda topeado en el origen de la
+  tendencia.
+- Figuras nuevas: triple techo y triple piso, cuñas, formación expansiva y plazo de los triángulos.
+- **Tres grados de tendencia** (principal semanal, intermedia y corta) y **régimen** según el ADX
+  (si hay tendencia o rango).
+- **Líneas de tendencia** validadas con tres toques, **retrocesos** de 38, 50 y 62%, **números
+  redondos**, **cambio de rol** de soportes y resistencias.
+- **Huecos** (de separación, de escape y de agotamiento) e isla de giro, **días de giro** diarios y
+  semanales.
+- Volumen acumulado (**OBV**), **estocástico** y oscilaciones fallidas del RSI, siempre a favor de la
+  tendencia.
+- **Velas japonesas** con el filtro del estocástico, y la **relación ganancia/riesgo** (mínimo 3 a 1).
+
 **⚠️ Resultado de la validación (10 activos, 10 años, 2.035 lecturas sin mirar el futuro):** la
 dirección de la lectura **no anticipó** el movimiento de las 4 semanas siguientes. Después de una
 lectura alcista el precio subió el 56% de las veces; después de una bajista, el 60%; en general, el 58%.

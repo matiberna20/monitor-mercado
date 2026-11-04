@@ -69,6 +69,28 @@ def grafico_lectura(simbolo: str, l: LecturaGrafico, moneda: str, carpeta: Path,
         ax.annotate(f"{letra} {_fmt(nivel.precio)}", (len(df) - 1, nivel.precio), xytext=(8, 0),
                     textcoords="offset points", fontsize=8, color=color, va="center", fontweight="bold")
 
+    e = l.extras
+    if e is not None:
+        # Líneas de tendencia (cap. 4 de Murphy): desde su primer punto hasta hoy.
+        for linea in e.lineas:
+            desde = max(0, linea.pos_inicio - inicio)
+            xs = np.arange(desde, len(df))
+            ys = [linea.valor_en(i + inicio) for i in xs]
+            ax.plot(xs, ys, color=SOPORTE if linea.alcista else RESISTENCIA, linewidth=1.3,
+                    linestyle="-" if linea.toques >= 3 else ":", alpha=0.9, zorder=2,
+                    label=f"Línea de tendencia {'alcista' if linea.alcista else 'bajista'}"
+                          + (" (validada)" if linea.toques >= 3 else " (tentativa)"))
+        # Retrocesos del último tramo (38, 50 y 62%), como marcas cortas a la derecha.
+        r = e.retrocesos
+        if r is not None and 0.05 < r.retrocedido < 1:
+            for frac, nivel in r.niveles.items():
+                if frac in (0.382, 0.5, 0.618):
+                    ax.plot([len(df) - 25, len(df) - 1], [nivel, nivel], color=TINTA_2, linewidth=0.7,
+                            linestyle=(0, (2, 2)), zorder=1)
+                    ax.annotate(f"{frac:.0%}".replace("38%", "38%").replace("62%", "62%"),
+                                (len(df) - 25, nivel), xytext=(-2, 0), textcoords="offset points", ha="right",
+                                va="center", fontsize=7, color=TINTA_2)
+
     # Giros etiquetados (HH = máximo más alto, LL = mínimo más bajo, etc.).
     for g in l.giros:
         i = g.pos - inicio
@@ -95,7 +117,7 @@ def grafico_lectura(simbolo: str, l: LecturaGrafico, moneda: str, carpeta: Path,
 
     ax.set_xlim(-1, len(df) + 20)
     ax.set_ylabel(moneda, color=MUTED, fontsize=8)
-    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), fontsize=8, frameon=False, ncol=4, labelcolor=TINTA_2)
+    ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), fontsize=7.5, frameon=False, ncol=3, labelcolor=TINTA_2)
 
     # Volumen, con el color de la vela.
     colores = [SUBE if cv >= ap else BAJA for cv, ap in zip(df["cierre"], df["apertura"])]
@@ -107,9 +129,10 @@ def grafico_lectura(simbolo: str, l: LecturaGrafico, moneda: str, carpeta: Path,
     ax_v.set_xticklabels([df.index[i].strftime("%d/%m/%y") for i in marcas])
 
     fig.suptitle(f"{simbolo} · lectura del gráfico: {l.direccion} (convicción {l.conviccion})",
-                 x=0.06, y=0.97, ha="left", fontsize=12, color=TINTA, fontweight="bold")
-    fig.subplots_adjust(top=0.9)
+                 x=0.06, y=0.99, ha="left", fontsize=12, color=TINTA, fontweight="bold")
+    fig.subplots_adjust(top=0.86)
     fig.text(0.06, 0.01, "S = soporte · R = resistencia · HH/HL = máximo/mínimo más alto · LH/LL = más bajo · "
+             "38/50/62% = retrocesos · "
              + AVISO_LEGAL.replace("⚠️", "").strip(), fontsize=7, color=MUTED)
     carpeta.mkdir(parents=True, exist_ok=True)
     ruta = carpeta / f"lectura_{simbolo.replace('^', 'INDICE_')}.png"

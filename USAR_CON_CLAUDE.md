@@ -45,6 +45,9 @@ tu sistema, y explicarte cada cosa con más detalle que el bot.
 | `estados_contables` | Ingresos, ganancias, caja, deuda y flujo de fondos de los últimos trimestres |
 | `comparar_activos` | Rendimiento 1m/3m/6m/1 año/en el año, volatilidad, caída máxima y correlación entre varios activos |
 | `dolar_ccl` | Evolución del CCL implícito (GGAL) |
+| `fuerza_relativa` | Si un activo le gana o le pierde al mercado, a su sector o a otra acción |
+| `panorama_mercado` | Acciones, bonos, tasas, dólar, oro, petróleo y cuántas acciones de tu watchlist acompañan |
+| `plan_de_riesgo` | Dónde iría el stop según el gráfico, cuántas acciones para no arriesgar más de X% y si la relación ganancia/riesgo llega a 3 a 1 |
 | `buscar_simbolo` | Encuentra el símbolo por el nombre de la empresa |
 | `watchlist` · `cargar_cartera` | Ver tus listas · cargar tu cartera pegándola en el chat |
 

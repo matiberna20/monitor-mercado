@@ -74,11 +74,14 @@ def test_analisis_manda_reporte_y_grafico(servicio, cfg, tmp_path, datos_ohlcv):
     ctx = Contexto(cfg, Secretos(_env_file=None), None, servicio, tecnico, noticias=None)
     respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["aapl"], ctx=ctx)
     assert respuestas[0].startswith("Analizando AAPL")
-    assert "lectura del gráfico" in respuestas[1] and "Soportes y resistencias" in respuestas[1]
-    assert respuestas[2].startswith("[foto") and "gráfico anotado" in respuestas[2]
-    assert "AAPL: tendencia" in respuestas[3] and "Señal final (solo técnica)" in respuestas[3]
-    assert "no es una recomendación" in respuestas[3]
-    assert "Explicación para aprender" in respuestas[4] and "Cómo lee un gráfico" in respuestas[4]
+    # La lectura del gráfico es larga: Telegram la parte en varios mensajes antes de la foto.
+    foto = next(i for i, r in enumerate(respuestas) if r.startswith("[foto"))
+    lectura = "\n".join(respuestas[1:foto])
+    assert "lectura del gráfico" in lectura and "Soportes y resistencias" in lectura
+    assert "gráfico anotado" in respuestas[foto]
+    assert "AAPL: tendencia" in respuestas[foto + 1] and "Señal final (solo técnica)" in respuestas[foto + 1]
+    assert "no es una recomendación" in respuestas[foto + 1]
+    assert "Explicación para aprender" in respuestas[foto + 2] and "Cómo lee un gráfico" in respuestas[foto + 2]
 
     respuestas, _ = _llamar(bot.cmd_analisis, servicio, ["NOEXISTE"], ctx=ctx)
     assert 'No encontré "NOEXISTE"' in respuestas[-1]  # mensaje claro, con ayuda para escribirlo bien
@@ -87,8 +90,9 @@ def test_analisis_manda_reporte_y_grafico(servicio, cfg, tmp_path, datos_ohlcv):
 def test_glosario(servicio):
     [r], _ = _llamar(bot.cmd_glosario, servicio, ["rsi"])
     assert r.startswith("📖 RSI")
-    [r], _ = _llamar(bot.cmd_glosario, servicio, [])
-    assert "MACD" in r and "CCL" in r
+    partes, _ = _llamar(bot.cmd_glosario, servicio, [])  # el glosario completo ocupa más de un mensaje
+    r = "\n".join(partes)
+    assert "MACD" in r and "CCL" in r and "ADX" in r
 
 
 def test_revisar_manda_el_aviso_al_chat(servicio, proveedor):

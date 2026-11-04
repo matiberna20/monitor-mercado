@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from monitor_mercado.tecnico import complementos as comp
+from monitor_mercado.tecnico.complementos import ruptura_confirmada
+
 VENTANA = 260  # ~1 año de ruedas para buscar giros y niveles
 
 
@@ -166,10 +169,21 @@ class Nivel:
     toques: int
     ultimo: pd.Timestamp
     origen: str  # "giros", "máximo de 52 semanas", "media de 200"...
+    tipos: str = ""  # "H", "L" o "HL": si se formó con máximos, mínimos o ambos
+    volumen_alto: bool = False  # cap. 4: un nivel con mucho volumen negociado pesa más
 
     @property
     def fuerza(self) -> str:
-        return "fuerte" if self.toques >= 3 else "media" if self.toques == 2 else "débil"
+        puntos = self.toques + (1 if self.volumen_alto else 0)
+        return "fuerte" if puntos >= 3 else "media" if puntos == 2 else "débil"
+
+    def cambio_de_rol(self, precio: float) -> str | None:
+        """Cap. 4: una resistencia superada pasa a ser soporte, y un soporte perdido pasa a ser resistencia."""
+        if self.tipos == "H" and self.precio < precio:
+            return "antes era resistencia, ahora soporte"
+        if self.tipos == "L" and self.precio > precio:
+            return "antes era soporte, ahora resistencia"
+        return None
 
 
 def niveles(df: pd.DataFrame, giros: list[Giro]) -> list[Nivel]:
@@ -182,7 +196,13 @@ def niveles(df: pd.DataFrame, giros: list[Giro]) -> list[Nivel]:
             grupos[-1].append(g)
         else:
             grupos.append([g])
-    resultado = [Nivel(float(np.mean([g.precio for g in grupo])), len(grupo), max(g.fecha for g in grupo), "giros")
+    vol_rel = np.nan_to_num(df["vol_relativo"].to_numpy(float)) if "vol_relativo" in df else np.ones(len(df))
+
+    def con_volumen(grupo: list[Giro]) -> bool:
+        return any(vol_rel[max(0, g.pos - 1):g.pos + 2].max() >= 1.5 for g in grupo)
+
+    resultado = [Nivel(float(np.mean([g.precio for g in grupo])), len(grupo), max(g.fecha for g in grupo), "giros",
+                       "".join(sorted({g.tipo for g in grupo})), con_volumen(grupo))
                  for grupo in grupos]
     extremos = [(float(df["maximo"].max()), "máximo del período"), (float(df["minimo"].min()), "mínimo del período")]
     for valor, origen in extremos:
@@ -245,6 +265,7 @@ class Figura:
     invalidacion: float | None
     explicacion: str
     giros: tuple[Giro, ...] = ()
+    sin_volumen: bool = False  # ruptura de piso sin el volumen que exige el libro: pesa menos
 
     def objetivo_alcanzado(self, precio: float) -> bool:
         """True si el precio ya llegó al objetivo medido (la figura "ya cumplió")."""
@@ -270,46 +291,106 @@ def _parecidos(a: float, b: float, tol: float) -> bool:
     return abs(a / b - 1) <= tol
 
 
+SEPARACION_MINIMA = 20  # cap. 5: entre los dos techos (o pisos) de una figura doble debería haber ~1 mes
+
+
+def _rompio(df: pd.DataFrame, desde: int, nivel: float, hacia_arriba: bool) -> bool:
+    """Ruptura con el filtro del libro (1% o dos cierres), mirando los cierres desde ``desde``."""
+    return ruptura_confirmada(df["cierre"].iloc[max(desde, len(df) - 3):], nivel, hacia_arriba)
+
+
+def _volumen_ruptura(df: pd.DataFrame, ruedas: int = 5) -> float:
+    return float(df["vol_relativo"].iloc[-ruedas:].max()) if "vol_relativo" in df else 1.0
+
+
+def _tendencia_previa(df: pd.DataFrame, giro: Giro, altura: float, alcista: bool) -> bool:
+    """Cap. 5: una figura de giro necesita una tendencia previa que "dar vuelta".
+
+    Se pide que en las ~60 ruedas anteriores al primer extremo el precio haya recorrido al
+    menos la altura de la figura en la dirección de esa tendencia.
+    """
+    inicio = max(0, giro.pos - 60)
+    if giro.pos - inicio < 10:
+        return False
+    tramo = df.iloc[inicio:giro.pos]
+    if alcista:  # la figura es de techo: antes tuvo que subir
+        return giro.precio - float(tramo["minimo"].min()) >= altura
+    return float(tramo["maximo"].max()) - giro.precio >= altura
+
+
+def _origen_tendencia(df: pd.DataFrame, giro: Giro, alcista: bool) -> float:
+    """Dónde empezó la tendencia previa: el objetivo de una figura de giro no debería pasar de ahí (cap. 5)."""
+    tramo = df.iloc[max(0, giro.pos - 120):giro.pos]
+    if tramo.empty:
+        return giro.precio
+    return float(tramo["minimo"].min()) if alcista else float(tramo["maximo"].max())
+
+
+def _ajustar_objetivo(objetivo: float, limite: float, bajista: bool) -> tuple[float, str]:
+    """El objetivo medido es un mínimo, y el máximo posible es deshacer toda la tendencia previa."""
+    if bajista and objetivo < limite:
+        return limite, (f" El objetivo medido quedaba más abajo, pero una figura de giro solo puede deshacer la "
+                        f"tendencia previa: se toma su origen, {_n(limite)}.")
+    if not bajista and objetivo > limite:
+        return limite, (f" El objetivo medido quedaba más arriba, pero una figura de giro solo puede deshacer la "
+                        f"tendencia previa: se toma su origen, {_n(limite)}.")
+    return objetivo, ""
+
+
 def figuras(df: pd.DataFrame, giros: list[Giro], umbral: float) -> list[Figura]:
-    """Busca figuras clásicas en los últimos giros."""
+    """Busca figuras clásicas en los últimos giros (reglas del cap. 5 y 6 de Murphy)."""
     cierre = float(df["cierre"].iloc[-1])
     # "A la misma altura" para un trader: menos de 2-5% de diferencia (según la volatilidad).
     tol = min(0.05, max(0.02, umbral * 0.4))
     encontradas: list[Figura] = []
     ult = giros[-6:]
     recientes = {g.pos for g in giros[-2:]}  # la figura tiene que terminar en uno de los 2 últimos giros
+    vol_ruptura = _volumen_ruptura(df)
 
-    # Doble techo / doble piso: los dos últimos extremos del mismo tipo a la misma altura.
+    # Doble techo / doble piso: los dos últimos extremos del mismo tipo a la misma altura, separados
+    # por al menos ~1 mes y precedidos por una tendencia (si no, es un simple rebote en un nivel).
     altos = [g for g in ult if g.tipo == "H"]
     bajos = [g for g in ult if g.tipo == "L"]
     if len(altos) >= 2:
         h1, h2 = altos[-2], altos[-1]
         valle = [g for g in bajos if h1.pos < g.pos < h2.pos]
-        if valle and h2.pos in recientes and _parecidos(h1.precio, h2.precio, tol) and len(df) - h2.pos <= 60:
+        if valle and h2.pos in recientes and _parecidos(h1.precio, h2.precio, tol) and len(df) - h2.pos <= 60 \
+                and h2.pos - h1.pos >= SEPARACION_MINIMA:
             cuello = valle[-1].precio
             alto = max(h1.precio, h2.precio)
-            confirmada = cierre < cuello
-            encontradas.append(Figura(
-                "Doble techo", -1, "confirmada" if confirmada else "en formación", cuello,
-                cuello - (alto - cuello), alto,
-                f"El precio chocó dos veces contra la zona de {_n(alto)} y no pudo superarla. "
-                + ("Ya perforó la \"línea cuello\" (el mínimo entre ambos techos): la figura está confirmada."
-                   if confirmada else f"Se confirma si cierra debajo de {_n(cuello)} (la línea cuello)."),
-                (h1, valle[-1], h2)))
+            if _tendencia_previa(df, h1, alto - cuello, alcista=True):
+                confirmada = _rompio(df, h2.pos, cuello, hacia_arriba=False)
+                objetivo, nota = _ajustar_objetivo(cuello - (alto - cuello), _origen_tendencia(df, h1, True), True)
+                encontradas.append(Figura(
+                    "Doble techo", -1, "confirmada" if confirmada else "en formación", cuello, objetivo, alto,
+                    f"El precio chocó dos veces contra la zona de {_n(alto)} y no pudo superarla. "
+                    + ("Ya perforó la \"línea cuello\" (el mínimo entre ambos techos) con un cierre claro: la figura "
+                       "está confirmada." if confirmada else
+                       f"Todavía no es un doble techo: se confirma recién si cierra claramente debajo de "
+                       f"{_n(cuello)} (la línea cuello). Rebotar en un máximo anterior es normal en una tendencia.")
+                    + nota, (h1, valle[-1], h2)))
     if len(bajos) >= 2:
         l1, l2 = bajos[-2], bajos[-1]
         pico = [g for g in altos if l1.pos < g.pos < l2.pos]
-        if pico and l2.pos in recientes and _parecidos(l1.precio, l2.precio, tol) and len(df) - l2.pos <= 60:
+        if pico and l2.pos in recientes and _parecidos(l1.precio, l2.precio, tol) and len(df) - l2.pos <= 60 \
+                and l2.pos - l1.pos >= SEPARACION_MINIMA:
             cuello = pico[-1].precio
             bajo = min(l1.precio, l2.precio)
-            confirmada = cierre > cuello
-            encontradas.append(Figura(
-                "Doble piso", 1, "confirmada" if confirmada else "en formación", cuello,
-                cuello + (cuello - bajo), bajo,
-                f"El precio rebotó dos veces en la zona de {_n(bajo)}: ahí aparecen compradores. "
-                + ("Ya superó la línea cuello (el máximo entre ambos pisos): la figura está confirmada."
-                   if confirmada else f"Se confirma si cierra arriba de {_n(cuello)} (la línea cuello)."),
-                (l1, pico[-1], l2)))
+            if _tendencia_previa(df, l1, cuello - bajo, alcista=False):
+                confirmada = _rompio(df, l2.pos, cuello, hacia_arriba=True)
+                objetivo, nota = _ajustar_objetivo(cuello + (cuello - bajo), _origen_tendencia(df, l1, False), False)
+                texto_vol = ""
+                if confirmada and vol_ruptura < 1.3:
+                    # Cap. 5: en los pisos el volumen en la ruptura es imprescindible.
+                    texto_vol = (" Ojo: la ruptura se hizo sin aumento de volumen, y en las figuras de piso el "
+                                 "libro lo considera imprescindible: es menos confiable.")
+                encontradas.append(Figura(
+                    "Doble piso", 1, "confirmada" if confirmada else "en formación", cuello, objetivo, bajo,
+                    f"El precio rebotó dos veces en la zona de {_n(bajo)}: ahí aparecen compradores. "
+                    + ("Ya superó la línea cuello (el máximo entre ambos pisos) con un cierre claro: la figura está "
+                       "confirmada." if confirmada else
+                       f"Todavía no es un doble piso: se confirma recién si cierra claramente arriba de {_n(cuello)} "
+                       "(la línea cuello).") + texto_vol + nota, (l1, pico[-1], l2), bool(texto_vol)))
     # Si aparecen las dos, vale la más reciente (la otra quedó superada por el precio).
     encontradas = _vigentes(encontradas, cierre)
     dobles = [f for f in encontradas if f.nombre.startswith("Doble")]
@@ -317,29 +398,56 @@ def figuras(df: pd.DataFrame, giros: list[Giro], umbral: float) -> list[Figura]:
         vieja = min(dobles, key=lambda f: f.giros[-1].pos)
         encontradas.remove(vieja)
 
-    # Hombro-cabeza-hombro (y su versión invertida): tres extremos, el del medio más marcado.
+    # Hombro-cabeza-hombro y triple techo (y sus versiones invertidas): tres extremos; si el del
+    # medio es más marcado es HCH, si los tres están a la misma altura es triple techo/piso (cap. 5).
+    vol = df["volumen"].to_numpy(float)
+
+    def vol_en(g: Giro) -> float:
+        return float(np.mean(vol[max(0, g.pos - 2):g.pos + 3]))
+
     for i in range(len(ult) - 4):
         a, b, c, d, e = ult[i:i + 5]
-        if a.tipo == c.tipo == e.tipo == "H" and c.precio > a.precio * (1 + tol / 2) \
-                and c.precio > e.precio * (1 + tol / 2) and _parecidos(a.precio, e.precio, tol * 1.5):
-            cuello = (b.precio + d.precio) / 2
-            confirmada = cierre < cuello
-            encontradas.append(Figura(
-                "Hombro-cabeza-hombro", -1, "confirmada" if confirmada else "en formación", cuello,
-                cuello - (c.precio - cuello), c.precio,
-                "Tres máximos con el del medio (la \"cabeza\") más alto: los compradores pierden fuerza. "
-                + ("Ya perforó la línea cuello: figura de giro bajista confirmada." if confirmada
-                   else f"Se confirma si cierra debajo de {_n(cuello)}."), (a, b, c, d, e)))
-        if a.tipo == c.tipo == e.tipo == "L" and c.precio < a.precio * (1 - tol / 2) \
-                and c.precio < e.precio * (1 - tol / 2) and _parecidos(a.precio, e.precio, tol * 1.5):
-            cuello = (b.precio + d.precio) / 2
-            confirmada = cierre > cuello
-            encontradas.append(Figura(
-                "Hombro-cabeza-hombro invertido", 1, "confirmada" if confirmada else "en formación", cuello,
-                cuello + (cuello - c.precio), c.precio,
-                "Tres mínimos con el del medio más bajo: los vendedores pierden fuerza. "
-                + ("Ya superó la línea cuello: figura de giro alcista confirmada." if confirmada
-                   else f"Se confirma si cierra arriba de {_n(cuello)}."), (a, b, c, d, e)))
+        if e.pos not in recientes and d.pos not in recientes:
+            continue
+        for techo in (True, False):
+            tipo = "H" if techo else "L"
+            if not a.tipo == c.tipo == e.tipo == tipo:
+                continue
+            signo = 1 if techo else -1
+            cabeza = signo * (c.precio - a.precio) > a.precio * tol / 2 and \
+                signo * (c.precio - e.precio) > e.precio * tol / 2 and _parecidos(a.precio, e.precio, tol * 1.5)
+            triple = _parecidos(a.precio, c.precio, tol) and _parecidos(c.precio, e.precio, tol)
+            if not (cabeza or triple):
+                continue
+            extremo = max(a.precio, c.precio, e.precio) if techo else min(a.precio, c.precio, e.precio)
+            cuello = (b.precio + d.precio) / 2 if cabeza else (min(b.precio, d.precio) if techo else max(b.precio, d.precio))
+            if not _tendencia_previa(df, a, abs(extremo - cuello), alcista=techo):
+                continue
+            confirmada = _rompio(df, e.pos, cuello, hacia_arriba=not techo)
+            objetivo, nota = _ajustar_objetivo(cuello - signo * abs(extremo - cuello),
+                                               _origen_tendencia(df, a, techo), techo)
+            if cabeza:
+                nombre = "Hombro-cabeza-hombro" if techo else "Hombro-cabeza-hombro invertido"
+                base = ("Tres máximos con el del medio (la \"cabeza\") más alto: los compradores pierden fuerza. "
+                        if techo else "Tres mínimos con el del medio más bajo: los vendedores pierden fuerza. ")
+            else:
+                nombre = "Triple techo" if techo else "Triple piso"
+                base = (f"Tres máximos a la misma altura ({_n(extremo)}): el precio no logra superarla. " if techo
+                        else f"Tres mínimos a la misma altura ({_n(extremo)}): ahí aparecen compradores una y otra vez. ")
+            # Volumen típico (cap. 5): menor en cada pico sucesivo, sobre todo en el último.
+            texto_vol = ""
+            if techo and vol_en(e) < vol_en(a) and vol_en(c) <= vol_en(a) * 1.1:
+                texto_vol = " El volumen fue bajando en cada máximo, como describe el libro: menos compradores."
+            sin_vol = not techo and confirmada and vol_ruptura < 1.3
+            if sin_vol:
+                texto_vol = (" Ojo: la ruptura fue sin aumento de volumen, y en las figuras de piso el libro lo "
+                             "considera imprescindible: es menos confiable.")
+            confirm = (("Ya perforó la línea cuello con un cierre claro: figura de giro bajista confirmada."
+                        if techo else "Ya superó la línea cuello con un cierre claro: figura de giro alcista confirmada.")
+                       if confirmada else
+                       f"Se confirma recién si cierra claramente {'debajo' if techo else 'arriba'} de {_n(cuello)}.")
+            encontradas.append(Figura(nombre, -signo, "confirmada" if confirmada else "en formación", cuello,
+                                      objetivo, extremo, base + confirm + texto_vol + nota, (a, b, c, d, e), sin_vol))
 
     # Triángulos y rango: comparan los dos últimos máximos y los dos últimos mínimos.
     if len(altos) >= 2 and len(bajos) >= 2 and min(altos[-2].pos, bajos[-2].pos) >= len(df) - 120:
@@ -348,31 +456,68 @@ def figuras(df: pd.DataFrame, giros: list[Giro], umbral: float) -> list[Figura]:
         techo, piso = h2.precio, l2.precio
         altura = max(h1.precio, h2.precio) - min(l1.precio, l2.precio)
         nombre, sesgo = None, 0
-        if plano_alto and l2.precio > l1.precio:
+        # Pendientes (por rueda, en %) de la línea de máximos y de la de mínimos.
+        p_alto = (h2.precio / h1.precio - 1) / max(1, h2.pos - h1.pos)
+        p_bajo = (l2.precio / l1.precio - 1) / max(1, l2.pos - l1.pos)
+        if plano_alto and plano_bajo:
+            nombre, sesgo = "Rango lateral (rectángulo)", 0
+        elif plano_alto and l2.precio > l1.precio:
             nombre, sesgo = "Triángulo ascendente", 1
         elif plano_bajo and h2.precio < h1.precio:
             nombre, sesgo = "Triángulo descendente", -1
         elif h2.precio < h1.precio and l2.precio > l1.precio:
             nombre, sesgo = "Triángulo simétrico", 0
-        elif plano_alto and plano_bajo:
-            nombre, sesgo = "Rango lateral (rectángulo)", 0
+        elif h2.precio > h1.precio and l2.precio > l1.precio and p_bajo > p_alto > 0:
+            # Cap. 6: las dos líneas suben pero se juntan; una cuña que sube es bajista (y al revés).
+            nombre, sesgo = "Cuña ascendente", -1
+        elif h2.precio < h1.precio and l2.precio < l1.precio and p_alto < p_bajo < 0:
+            nombre, sesgo = "Cuña descendente", 1
+        elif h2.precio > h1.precio * (1 + tol / 2) and l2.precio < l1.precio * (1 - tol / 2):
+            nombre, sesgo = "Formación expansiva", -1
         # Techo plano + mínimos más altos se parece a un doble techo, pero un trader lo lee como
         # triángulo ascendente (los compradores siguen presionando). Igual al revés.
         reemplaza = {"Triángulo ascendente": "Doble techo", "Triángulo descendente": "Doble piso"}.get(nombre or "")
         for f in list(encontradas):
             if f.nombre == reemplaza and f.estado == "en formación":
                 encontradas.remove(f)
-        if nombre and not any(f.nombre.startswith("Doble") for f in encontradas):
-            if cierre > techo:
+        if nombre == "Triángulo simétrico":
+            # Cap. 6: es una pausa; lo más probable es que siga la tendencia que traía.
+            inicio = min(h1.pos, l1.pos)
+            previo = float(df["cierre"].iloc[max(0, inicio - 60)])
+            sesgo = 1 if df["cierre"].iloc[inicio] > previo else -1
+        ocupado = any(f.nombre.startswith(("Doble", "Triple", "Hombro")) for f in encontradas)
+        if nombre and not ocupado:
+            desde = max(h2.pos, l2.pos)
+            sin_vol = False
+            if _rompio(df, desde, techo, hacia_arriba=True):
                 estado, sesgo_final, objetivo = "confirmada", 1, techo + altura
-                texto = f"El precio rompió hacia arriba el techo de {_n(techo)}."
-            elif cierre < piso:
+                texto = f"El precio rompió hacia arriba el techo de {_n(techo)} con un cierre claro."
+                if vol_ruptura < 1.3:
+                    sin_vol = True
+                    texto += (" Pero sin aumento de volumen: el libro dice que para retomar una suba el volumen "
+                              "tiene que acompañar, así que es menos confiable.")
+            elif _rompio(df, desde, piso, hacia_arriba=False):
                 estado, sesgo_final, objetivo = "confirmada", -1, piso - altura
-                texto = f"El precio rompió hacia abajo el piso de {_n(piso)}."
+                texto = f"El precio rompió hacia abajo el piso de {_n(piso)} con un cierre claro."
             else:
                 estado, sesgo_final, objetivo = "en formación", sesgo, None
                 texto = f"El precio está encerrado entre {_n(piso)} y {_n(techo)}; la salida marca la dirección."
+                if nombre == "Triángulo simétrico" and p_alto < 0 < p_bajo:
+                    # Cap. 6: la ruptura suele llegar entre 2/3 y 3/4 del camino hacia el vértice.
+                    # Recta de máximos: h2·(1 + p_alto·(x − h2)); de mínimos: l2·(1 + p_bajo·(x − l2)).
+                    base = min(h1.pos, l1.pos)
+                    a_h, a_l = h2.precio * p_alto, l2.precio * p_bajo
+                    vertice = ((l2.precio - a_l * l2.pos) - (h2.precio - a_h * h2.pos)) / (a_h - a_l)
+                    if vertice > base and (len(df) - 1 - base) / (vertice - base) > 0.75:
+                        texto += (" Ya pasó las 3/4 partes del camino hacia el vértice sin salir: según el libro, "
+                                  "el triángulo pierde fuerza.")
             explicacion = {
+                "Cuña ascendente": "Máximos y mínimos que suben pero cada vez más juntos: la suba pierde impulso. "
+                                   "Aunque apunte hacia arriba, suele resolverse hacia abajo. ",
+                "Cuña descendente": "Máximos y mínimos que bajan pero cada vez más juntos: la caída pierde impulso. "
+                                    "Aunque apunte hacia abajo, suele resolverse hacia arriba. ",
+                "Formación expansiva": "Máximos más altos y mínimos más bajos: un mercado nervioso y fuera de control. "
+                                       "Suele aparecer en techos importantes. ",
                 "Triángulo ascendente": "Techo plano y mínimos cada vez más altos: los compradores presionan "
                                         "contra una misma resistencia. Suele resolverse hacia arriba. ",
                 "Triángulo descendente": "Piso plano y máximos cada vez más bajos: los vendedores presionan "
@@ -383,15 +528,18 @@ def figuras(df: pd.DataFrame, giros: list[Giro], umbral: float) -> list[Figura]:
                                               "tendencia. ",
             }[nombre]
             encontradas.append(Figura(nombre, sesgo_final, estado, techo if sesgo_final >= 0 else piso, objetivo,
-                                      piso if sesgo_final >= 0 else techo, explicacion + texto, (h1, l1, h2, l2)))
+                                      piso if sesgo_final >= 0 else techo, explicacion + texto, (h1, l1, h2, l2),
+                                      sin_vol))
 
-    # Bandera: impulso fuerte seguido de una pausa corta y estrecha.
+    # Bandera: impulso fuerte seguido de una pausa corta y estrecha, con menos volumen (cap. 6).
     c = df["cierre"].to_numpy(float)
     if len(c) > 40:
         impulso = c[-12] / c[-30] - 1
         pausa = c[-12:]
         rango_pausa = (pausa.max() - pausa.min()) / pausa.mean()
-        if abs(impulso) >= max(0.12, 4 * umbral) and rango_pausa <= abs(impulso) * 0.5:
+        v = df["volumen"].to_numpy(float)
+        vol_baja = np.mean(v[-12:-1]) < np.mean(v[-30:-12])
+        if abs(impulso) >= max(0.12, 4 * umbral) and rango_pausa <= abs(impulso) * 0.5 and vol_baja:
             alcista = impulso > 0
             borde = float(pausa.max() if alcista else pausa.min())
             confirmada = (cierre > borde * 0.999) if alcista else (cierre < borde * 1.001)
@@ -449,13 +597,21 @@ def ruptura(df: pd.DataFrame, lista: list[Nivel], ruedas: int = 5) -> tuple[int,
         if n.toques < 2:
             continue
         if antes < n.precio < ahora:
-            return (1 if con_vol else 0), (f"rompió la resistencia de {_n(n.precio)} "
-                                           + ("con volumen alto (ruptura más creíble)" if con_vol
-                                              else "pero sin volumen (puede ser una ruptura falsa)"))
+            if not ruptura_confirmada(c.iloc[-3:], n.precio, True):
+                return 0, (f"está intentando superar la resistencia de {_n(n.precio)}, pero todavía sin el filtro "
+                           "que pide el libro (cerrar 1% arriba o dos cierres seguidos): puede ser una ruptura falsa")
+            return (1 if con_vol else 0), (f"rompió la resistencia de {_n(n.precio)} con un cierre claro "
+                                           + ("y con volumen alto (ruptura más creíble)" if con_vol
+                                              else "pero sin volumen (puede ser una ruptura falsa)")
+                                           + "; ahora ese nivel debería funcionar como soporte")
         if antes > n.precio > ahora:
-            return (-1 if con_vol else 0), (f"perdió el soporte de {_n(n.precio)} "
-                                            + ("con volumen alto (más creíble)" if con_vol
-                                               else "pero sin volumen (puede recuperarlo)"))
+            if not ruptura_confirmada(c.iloc[-3:], n.precio, False):
+                return 0, (f"está perforando el soporte de {_n(n.precio)}, pero todavía sin el filtro que pide el "
+                           "libro (cerrar 1% abajo o dos cierres seguidos): puede recuperarlo")
+            return (-1 if con_vol else 0), (f"perdió el soporte de {_n(n.precio)} con un cierre claro "
+                                            + ("y con volumen alto (más creíble)" if con_vol
+                                               else "pero sin volumen (puede recuperarlo)")
+                                            + "; ahora ese nivel debería funcionar como resistencia")
     return 0, None
 
 
@@ -467,6 +623,27 @@ class Escenario:
     disparador: float | None
     objetivo: float | None
     texto: str
+
+
+@dataclass(frozen=True)
+class Complementos:
+    """Herramientas clásicas que completan la lectura (ver ``complementos.py``)."""
+
+    grados: comp.GradosTendencia
+    regimen: comp.Regimen
+    lineas: list[comp.LineaTendencia]
+    retrocesos: comp.Retrocesos | None
+    redondos: str
+    huecos: list[comp.Hueco]
+    isla: str | None
+    giro_diario: str | None
+    giro_semanal: str | None
+    obv: str | None
+    osciladores: comp.Osciladores
+    velas: list[comp.Vela]
+    regla_4_semanas: str
+    medias_semanales: str
+    relacion_riesgo: str | None
 
 
 @dataclass(frozen=True)
@@ -496,6 +673,7 @@ class LecturaGrafico:
     escenario_bajista: Escenario
     invalidacion: float | None
     votos: dict[str, float] = field(default_factory=dict)
+    extras: Complementos | None = None
 
     @property
     def direccion(self) -> str:
@@ -522,7 +700,37 @@ def _medias(df: pd.DataFrame) -> tuple[int, str]:
 
 
 PESOS = {"estructura": 2.0, "canal": 1.0, "medias": 1.0, "figura": 2.0, "ruptura": 1.5,
-         "divergencia": 1.0, "volumen": 0.5}
+         "divergencia": 1.0, "volumen": 0.5,
+         # Agregados con las reglas de Murphy: la tendencia principal manda (caps. 2, 8 y 10), la ruptura
+         # de la línea de tendencia avisa un cambio (cap. 4); osciladores y OBV son secundarios (caps. 7 y 10).
+         "tendencia_principal": 1.5, "linea_tendencia": 1.0, "osciladores": 0.5, "obv": 0.5}
+
+
+def _relacion_riesgo(precio: float, sesgo: float, soportes: list[Nivel], resistencias: list[Nivel],
+                     objetivos_alc: list[float], objetivos_baj: list[float]) -> str | None:
+    """Cap. 16: la ganancia posible debería ser al menos 3 veces la pérdida posible."""
+    if sesgo > 0.25 and soportes:
+        stop = soportes[0].precio
+        metas = [r.precio for r in resistencias] + objetivos_alc
+        meta = min((m for m in metas if m > precio), default=None)
+    elif sesgo < -0.25 and resistencias:
+        stop = resistencias[0].precio
+        metas = [s.precio for s in soportes] + objetivos_baj
+        meta = max((m for m in metas if m < precio), default=None)
+    else:
+        return None
+    if meta is None:
+        return None
+    riesgo, premio = abs(precio - stop), abs(meta - precio)
+    if riesgo == 0:
+        return None
+    r = premio / riesgo
+    base = (f"Desde el precio actual, la próxima meta ({_n(meta)}) está a {premio / precio:.1%} y el nivel que anula "
+            f"la idea ({_n(stop)}) a {riesgo / precio:.1%}: la relación ganancia/riesgo es {r:.1f} a 1".replace(".", ","))
+    if r >= 3:
+        return base + ". Cumple la regla del libro (al menos 3 a 1)."
+    return base + (". No llega al 3 a 1 que pide el libro: con esta relación, aun acertando seguido es difícil "
+                   "ganar. Un trader esperaría un mejor punto de entrada.")
 
 
 def leer_grafico(df_completo: pd.DataFrame) -> LecturaGrafico:
@@ -550,15 +758,35 @@ def leer_grafico(df_completo: pd.DataFrame) -> LecturaGrafico:
     rup, rup_txt = ruptura(df, lista)
     med, med_txt = _medias(df)
 
+    # Herramientas clásicas (Murphy). Las semanales usan toda la historia disponible.
+    grados = comp.grados_tendencia(df_completo, est)
+    reg = comp.regimen(df)
+    lineas = comp.lineas_tendencia(df, g)
+    retro = comp.retrocesos(precio, g, actual)
+    lista_huecos, isla = comp.huecos(df)
+    _, giro_d = comp.dia_de_giro(df)
+    _, giro_s = comp.giro_semanal(df_completo)
+    voto_obv, obv_txt = comp.divergencia_obv(df, g)
+    osc = comp.osciladores(df, grados.principal or est, comp.ruedas_desde_ruptura(df))
+    _, r4 = comp.regla_4_semanas(df)
+    _, ms = comp.medias_semanales(df_completo)
+    voto_linea = 0.0
+    for linea in lineas:
+        if linea.rota:
+            voto_linea = -1.0 if linea.alcista else 1.0
+
     voto_canal = float(np.sign(can.pendiente_mensual)) if can.claro and abs(can.pendiente_mensual) > 0.01 else 0.0
     voto_figura = 0.0
     if figs:
         principal = max(figs, key=lambda f: (f.estado == "confirmada", abs(f.sesgo)))
-        # En formación pesa la mitad; si ya alcanzó su objetivo, también (ya "cumplió").
-        completa = principal.estado == "confirmada" and not principal.objetivo_alcanzado(precio)
+        # En formación pesa la mitad; si ya alcanzó su objetivo, también (ya "cumplió"). Una ruptura de
+        # piso sin volumen también pesa la mitad (cap. 5: en los pisos el volumen es imprescindible).
+        completa = principal.estado == "confirmada" and not principal.objetivo_alcanzado(precio) \
+            and not principal.sin_volumen
         voto_figura = principal.sesgo * (1.0 if completa else 0.5)
     votos = {"estructura": est, "canal": voto_canal, "medias": med, "figura": voto_figura, "ruptura": rup,
-             "divergencia": div, "volumen": vol}
+             "divergencia": div, "volumen": vol, "tendencia_principal": grados.principal,
+             "linea_tendencia": voto_linea, "osciladores": osc.voto, "obv": voto_obv}
     sesgo = sum(PESOS[k] * v for k, v in votos.items()) / sum(PESOS.values())
 
     # Escenarios con los niveles y objetivos más cercanos.
@@ -589,6 +817,9 @@ def leer_grafico(df_completo: pd.DataFrame) -> LecturaGrafico:
         invalidacion = r1
     else:
         invalidacion = None
+    extras = Complementos(
+        grados, reg, lineas, retro, comp.texto_redondos(precio), lista_huecos, isla, giro_d, giro_s, obv_txt, osc,
+        comp.velas(df), r4, ms, _relacion_riesgo(precio, sesgo, soportes, resistencias, obj_alc, obj_baj))
     return LecturaGrafico(precio, u, df, g, est, est_txt, soportes[:3], resistencias[:3], can, figs, vol, vol_txt,
                           div, div_txt, rup, rup_txt, med, med_txt, float(sesgo), alcista, bajista, invalidacion,
-                          {k: float(v) for k, v in votos.items()})
+                          {k: float(v) for k, v in votos.items()}, extras)

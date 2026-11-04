@@ -13,6 +13,12 @@ Sirve para dos cosas:
 > El backtest del propio sistema mostró que la **dirección** que surge de estas reglas no anticipa
 > el movimiento de las semanas siguientes mejor que el azar. Lo valioso es el **mapa**: dónde
 > están los niveles, qué invalida una idea y cuánto se arriesga. Explicalo siempre así.
+>
+> Validación del 04/11/2026 (74 activos fuera de muestra; ver el README, sección 4b): las figuras
+> confirmadas quedaron, en general, a pocos puntos del azar. Las de piso salieron algo mejor, en
+> parte porque las acciones tienden a subir. La regla de que el volumen es imprescindible en las
+> rupturas al alza no se confirmó con claridad. Cuando expliques una figura, decí que es una
+> referencia y no una probabilidad alta de éxito.
 
 ---
 

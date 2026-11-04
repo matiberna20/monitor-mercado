@@ -204,6 +204,21 @@ dirección de la lectura **no anticipó** el movimiento de las 4 semanas siguien
 lectura alcista el precio subió el 56% de las veces; después de una bajista, el 60%; en general, el 58%.
 Lo útil de la lectura es el **mapa de niveles**, no la predicción.
 
+**Con las reglas de Murphy (validado el 04/11/2026 en 74 activos que no se usaron para ajustar nada,
+14.281 lecturas):**
+- La dirección **sigue sin anticipar** el precio: la correlación fue −0,01 antes y después de los
+  cambios. Después de una lectura alcista el precio subió el 55,8% de las veces, contra un 55,1% en general.
+- **Figuras confirmadas:** se midió si llegaron a su objetivo antes de tocar el nivel que las
+  invalida, y se comparó con lo que daría un precio al azar con las mismas distancias. La mayoría
+  quedó a menos de ±7 puntos del azar, que es lo que se espera por casualidad con 50 a 350 casos.
+  Las de piso (doble piso +13, hombro-cabeza-hombro invertido +7) salieron mejor, pero las acciones
+  tienden a subir con el tiempo y eso favorece a cualquier figura alcista. Las de techo no mostraron
+  ventaja (doble techo −5).
+- **Volumen en las rupturas al alza:** ventaja de +7 puntos con volumen y de +5 sin volumen. La
+  diferencia es chica y no confirma, con estos datos, que el volumen sea imprescindible.
+- **Conclusión:** las reglas del libro mejoran la **explicación** (niveles, filtros, dónde se anula
+  una idea, relación ganancia/riesgo), pero no convierten la lectura en una predicción.
+
 ### Uso
 
 | Telegram | Terminal | Qué hace |

@@ -14,6 +14,10 @@ Sistema personal en Python para seguir activos financieros. Se construye por eta
 > informativo y probabilístico, no una recomendación de inversión. Es un complemento de
 > las alertas de TradingView, no un reemplazo.
 
+> 💬 **Nuevo: usarlo conversando con Claude.** Todas las funciones del bot, más datos de
+> empresas, balances y comparaciones, como herramientas de Claude (en la nube o en tu PC).
+> Ver [`USAR_CON_CLAUDE.md`](USAR_CON_CLAUDE.md).
+
 ---
 
 ## 1. Instalación
@@ -514,7 +518,9 @@ creando software/
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)
 │   ├── notificaciones/      bot de Telegram y formato de mensajes
+│   ├── servidor_claude.py   servidor MCP: las mismas funciones como herramientas de Claude
 │   └── cli.py               comandos de terminal
+├── .mcp.json · CLAUDE.md    configuración para Claude Code (ver USAR_CON_CLAUDE.md)
 ├── tests/                   tests automáticos (pytest)
 ├── data/                    base SQLite (se crea sola)
 └── logs/                    monitor.log

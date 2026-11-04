@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "monitor-mercado": {
+      "command": "sh",
+      "args": ["scripts/servidor_claude.sh"]
+    }
+  }
+}

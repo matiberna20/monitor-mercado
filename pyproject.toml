@@ -25,9 +25,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# Conexión con Claude (servidor MCP): pip install -e ".[claude]"
+claude = ["mcp>=2.3,<3"]
 
 [project.scripts]
 monitor = "monitor_mercado.cli:app"
+monitor-claude = "monitor_mercado.servidor_claude:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -29,16 +29,22 @@ class ValidacionLectura:
     figuras: pd.DataFrame = None  # type: ignore[assignment]
 
     def resumen_figuras(self) -> pd.DataFrame:
-        """Por figura: casos, % que llegó al objetivo, % invalidada y % sin resolver en 60 ruedas."""
+        """Por figura: casos, % que llegó al objetivo, % invalidada y lo que daría el azar.
+
+        "Azar" = probabilidad de tocar primero el objetivo si el precio se moviera al azar, dadas las
+        distancias al objetivo y al nivel que invalida la figura: d_inval / (d_inval + d_objetivo).
+        Solo se cuentan los casos resueltos (los que tocaron uno de los dos niveles en 60 ruedas).
+        """
         f = self.figuras
         if f is None or f.empty:
             return pd.DataFrame()
-        g = f.groupby("figura")["resultado"]
+        r = f[f["resultado"] != "sin resolver"]
+        g = r.groupby("figura")
         return pd.DataFrame({
             "casos": g.size(),
-            "objetivo": g.apply(lambda r: (r == "objetivo").mean()),
-            "invalidada": g.apply(lambda r: (r == "invalidada").mean()),
-        }).sort_values("casos", ascending=False)
+            "objetivo": g["resultado"].apply(lambda x: (x == "objetivo").mean()),
+            "azar": g["azar"].mean(),
+        }).assign(ventaja=lambda t: t["objetivo"] - t["azar"]).sort_values("casos", ascending=False)
 
     @property
     def base(self) -> float:
@@ -110,11 +116,16 @@ def validar(tecnico: ServicioTecnico, simbolos: list[str], horizonte: int = 20, 
                     continue
                 vistas.add(clave)
                 fin = min(len(ind), i + 1 + plazo_figuras)
-                figs.append({"simbolo": s, "figura": f.nombre, "sin_volumen": f.sin_volumen,
+                d_obj, d_inv = abs(f.objetivo - l.precio), abs(l.precio - f.invalidacion)
+                if d_obj + d_inv == 0:
+                    continue
+                figs.append({"simbolo": s, "figura": f.nombre, "sesgo": f.sesgo, "sin_volumen": f.sin_volumen,
+                             "azar": d_inv / (d_obj + d_inv),
                              "resultado": _resultado_figura(maximo[i + 1:fin], minimo[i + 1:fin], f.sesgo,
                                                             f.objetivo, f.invalidacion)})
     return ValidacionLectura(pd.DataFrame(filas, columns=["simbolo", "direccion", "sesgo", "futuro"]), horizonte,
-                             pd.DataFrame(figs, columns=["simbolo", "figura", "sin_volumen", "resultado"]))
+                             pd.DataFrame(figs, columns=["simbolo", "figura", "sesgo", "sin_volumen", "azar",
+                                                         "resultado"]))
 
 
 def _p(v: float, signo: bool = False) -> str:
@@ -141,22 +152,24 @@ def texto_validacion(v: ValidacionLectura) -> str:
                   "(0 = ninguna relación)".replace(".", ","))
     figs = v.resumen_figuras()
     if not figs.empty:
-        lineas += ["", "📐 Figuras confirmadas: ¿llegaron a su objetivo antes de invalidarse? (60 ruedas)"]
+        lineas += ["", "📐 Figuras confirmadas: ¿llegaron a su objetivo antes de tocar el nivel que las invalida?",
+                   "(casos resueltos en 60 ruedas; \"azar\" = lo que daría un precio que se mueve al azar con esas "
+                   "mismas distancias)"]
         for nombre, fila in figs.iterrows():
-            lineas.append(f"• {nombre}: {int(fila['casos'])} casos · objetivo {_p(fila['objetivo'])} · invalidada "
-                          f"{_p(fila['invalidada'])}")
+            lineas.append(f"• {nombre}: {int(fila['casos'])} casos · objetivo {_p(fila['objetivo'])} · azar "
+                          f"{_p(fila['azar'])} · ventaja {_p(fila['ventaja'], True)}")
         # Regla del libro: en las rupturas al alza el volumen es imprescindible. ¿Se cumple acá?
         f = v.figuras
-        alcistas = f[f["figura"].isin(["Doble piso", "Triple piso", "Hombro-cabeza-hombro invertido",
-                                       "Triángulo ascendente", "Triángulo simétrico", "Rango lateral (rectángulo)",
-                                       "Cuña descendente"])]
+        alcistas = f[(f["sesgo"] > 0) & (f["resultado"] != "sin resolver")]
         con, sin = alcistas[~alcistas["sin_volumen"]], alcistas[alcistas["sin_volumen"]]
         if len(con) >= 10 and len(sin) >= 10:
-            lineas.append(f"Rupturas al alza con volumen: objetivo {_p((con['resultado'] == 'objetivo').mean())} "
-                          f"({len(con)} casos); sin volumen: {_p((sin['resultado'] == 'objetivo').mean())} "
-                          f"({len(sin)} casos).")
-        lineas.append("Ojo: el objetivo suele estar más lejos que el nivel que invalida la figura, así que una figura "
-                      "puede \"servir\" aunque llegue al objetivo menos de la mitad de las veces. Pocos casos = "
+            def ventaja(t: pd.DataFrame) -> str:
+                return _p((t["resultado"] == "objetivo").mean() - t["azar"].mean(), True)
+
+            lineas.append(f"Figuras alcistas que rompieron con volumen: ventaja {ventaja(con)} ({len(con)} casos); "
+                          f"sin volumen: {ventaja(sin)} ({len(sin)} casos). (Solo se mide en las figuras de piso, "
+                          "triángulos y rectángulos rotos hacia arriba.)")
+        lineas.append("Una ventaja cercana a 0 significa que la figura no aporta más que el azar. Pocos casos = "
                       "resultado poco confiable.")
     prob = v.prob_azar()
     alc = tabla["medio"].get("ALCISTA")

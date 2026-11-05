@@ -45,7 +45,7 @@ def _encabezado(e: EstadoCartera) -> list[str]:
 def texto_cartera(e: EstadoCartera) -> str:
     """Estado completo, una línea por posición (de mayor a menor peso)."""
     if not e.posiciones:
-        return "Todavía no cargaste tu cartera (archivo mi_cartera.csv)."
+        return "Todavía no cargaste tu cartera (archivo mi_cartera.csv, o el diario si cartera.fuente es 'diario')."
     lineas = [f"📋 Tu cartera ({e.momento.astimezone(AR):%d/%m %H:%M} hora Argentina)", *_encabezado(e), "",
               "Símbolo · hoy · desde la compra · peso"]
     for f in sorted(e.posiciones, key=lambda f: -(f.valor or 0)):

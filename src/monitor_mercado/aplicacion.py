@@ -12,6 +12,8 @@ from monitor_mercado.cartera.servicio import ServicioCartera
 from monitor_mercado.configuracion import Configuracion, Secretos, cargar_configuracion, cargar_secretos
 from monitor_mercado.datos.yahoo import ProveedorYahoo
 from monitor_mercado.db import crear_motor
+from monitor_mercado.diario.repositorio import RepositorioDiario
+from monitor_mercado.diario.servicio import ServicioDiario
 from monitor_mercado.noticias.fuentes import (
     Finnhub, FuenteNoticias, GoogleNewsRSS, Marketaux, NewsAPI, SecEdgar, YahooRSS,
 )
@@ -61,6 +63,7 @@ class Contexto:
     nombres: ResolutorNombres | None = None
     stops: ServicioStops | None = None
     tamano: ServicioTamano | None = None
+    diario: ServicioDiario | None = None
 
     def buscador(self) -> BuscadorSimbolos:
         """Buscador con tu watchlist, tu cartera y las empresas que seguís (se arma al momento)."""
@@ -152,7 +155,9 @@ def armar_contexto() -> Contexto:
     )
 
     tecnico = ServicioTecnico(almacen, cfg)
-    cartera = ServicioCartera(cfg.cartera.ruta(), proveedor, cfg, motor, armar_fuentes(cfg, secretos), nombres)
+    diario = ServicioDiario(RepositorioDiario(motor), proveedor, cfg)
+    cartera = ServicioCartera(cfg.cartera.ruta(), proveedor, cfg, motor, armar_fuentes(cfg, secretos), nombres,
+                              diario=diario)
     return Contexto(
         cfg=cfg,
         secretos=secretos,
@@ -166,4 +171,5 @@ def armar_contexto() -> Contexto:
         nombres=nombres,
         stops=ServicioStops(RepositorioStops(motor), proveedor, cfg, cartera),
         tamano=ServicioTamano(proveedor, cfg, cartera),
+        diario=diario,
     )

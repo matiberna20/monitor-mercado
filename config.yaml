@@ -253,6 +253,8 @@ backtest:
 cartera:
   # Archivo con tus posiciones (no se sube a Git: es información personal).
   archivo: mi_cartera.csv
+  # De dónde salen tus posiciones: "archivo" (mi_cartera.csv) o "diario" (tus /compre y /vendi).
+  fuente: archivo
   # Resumen automático al cierre, por Telegram (con el bot abierto).
   resumen_diario: true
   # Hora del resumen, en hora de Nueva York (16:20 NY = 17:20 Argentina, 20 min después del cierre).

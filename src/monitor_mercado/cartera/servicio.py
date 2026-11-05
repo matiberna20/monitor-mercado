@@ -24,6 +24,7 @@ from monitor_mercado.noticias.nombres import ResolutorNombres
 
 if TYPE_CHECKING:
     from monitor_mercado.cartera.rebalanceo import PlanRebalanceo
+    from monitor_mercado.diario.servicio import ServicioDiario
 
 log = logging.getLogger(__name__)
 NY = ZoneInfo("America/New_York")
@@ -101,6 +102,7 @@ class ServicioCartera:
         motor: Engine,
         fuentes: list[FuenteNoticias] | None = None,
         nombres: ResolutorNombres | None = None,
+        diario: "ServicioDiario | None" = None,
     ) -> None:
         self.ruta = ruta
         self._proveedor = proveedor
@@ -108,9 +110,17 @@ class ServicioCartera:
         self._sesiones = sessionmaker(motor, expire_on_commit=False)
         self._fuentes = fuentes or []
         self._nombres = nombres
+        self._diario = diario
+
+    @property
+    def usa_diario(self) -> bool:
+        """True si las posiciones salen del diario de operaciones y no del archivo."""
+        return self._cfg.cartera.fuente == "diario" and self._diario is not None
 
     def posiciones(self) -> list[Posicion]:
-        """Posiciones del archivo (lista vacía si todavía no existe)."""
+        """Posiciones del archivo o del diario, según ``cartera.fuente`` (lista vacía si no hay)."""
+        if self.usa_diario:
+            return self._diario.posiciones()
         return leer_cartera(self.ruta) if self.ruta.exists() else []
 
     def estado(self) -> EstadoCartera:

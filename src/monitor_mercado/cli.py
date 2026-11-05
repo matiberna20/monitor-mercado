@@ -456,6 +456,95 @@ def rebalanceo() -> None:
     typer.echo(texto_rebalanceo(ctx.cartera.rebalanceo()))
 
 
+def _registrar(datos: list[str], tipo_txt: str) -> None:
+    from monitor_mercado.diario.calculo import ErrorDiario
+    from monitor_mercado.diario.modelos import TipoMovimiento
+    from monitor_mercado.diario.parser import parsear_movimiento
+    from monitor_mercado.diario.reporte import texto_registrado
+
+    ctx = _contexto()
+    tipo = TipoMovimiento.COMPRA if tipo_txt == "compre" else TipoMovimiento.VENTA
+    if datos:
+        datos = [ctx.buscador().resolver(datos[0]), *datos[1:]]
+    try:
+        typer.echo(texto_registrado(ctx.diario.registrar(tipo, parsear_movimiento(datos))))
+    except (ErrorFormato, ErrorDiario) as e:
+        _salir_con_error(str(e))
+
+
+@app.command()
+def compre(
+    datos: list[str] = typer.Argument(..., help="SIMBOLO CANTIDAD PRECIO [comision X] [fecha AAAA-MM-DD] [nota TEXTO]"),
+) -> None:
+    """Registra una compra en el diario. Ej.: monitor compre AAPL 10 180,5 nota soporte"""
+    _registrar(datos, "compre")
+
+
+@app.command()
+def vendi(
+    datos: list[str] = typer.Argument(..., help="SIMBOLO CANTIDAD PRECIO [comision X] [fecha AAAA-MM-DD] [nota TEXTO]"),
+) -> None:
+    """Registra una venta en el diario. Ej.: monitor vendi AAPL 5 210"""
+    _registrar(datos, "vendi")
+
+
+@app.command()
+def diario(simbolo: str | None = typer.Argument(None, help="Solo las operaciones de este símbolo.")) -> None:
+    """Tus operaciones, resultado realizado y no realizado, aciertos, mejores y peores."""
+    from monitor_mercado.notificaciones.telegram_bot import texto_diario_completo
+
+    ctx = _contexto()
+    typer.echo(texto_diario_completo(ctx, simbolo.upper() if simbolo else None))
+
+
+@app.command("editar-op")
+def editar_op(
+    id_mov: int = typer.Argument(..., help="ID de la operación (ver 'monitor diario')."),
+    campo: str = typer.Argument(..., help="fecha, simbolo, cantidad, precio, comision, moneda o nota."),
+    valor: list[str] = typer.Argument(..., help="Nuevo valor."),
+) -> None:
+    """Corrige un campo de una operación del diario."""
+    from monitor_mercado.diario.calculo import ErrorDiario
+    from monitor_mercado.diario.parser import parsear_edicion
+    from monitor_mercado.diario.reporte import linea_movimiento
+
+    ctx = _contexto()
+    try:
+        mov = ctx.diario.editar(*parsear_edicion([str(id_mov), campo, *valor]))
+    except (ErrorFormato, ErrorDiario) as e:
+        _salir_con_error(str(e))
+    except KeyError:
+        _salir_con_error(f"No existe la operación #{id_mov}.")
+    typer.echo("Operación corregida:\n" + linea_movimiento(mov))
+
+
+@app.command("borrar-op")
+def borrar_op(id_mov: int = typer.Argument(..., help="ID de la operación (ver 'monitor diario').")) -> None:
+    """Borra una operación del diario."""
+    from monitor_mercado.diario.calculo import ErrorDiario
+
+    ctx = _contexto()
+    try:
+        ok = ctx.diario.borrar(id_mov)
+    except ErrorDiario as e:
+        _salir_con_error(f"No se puede borrar: {e}")
+    if not ok:
+        _salir_con_error(f"No existe la operación #{id_mov}.")
+    typer.echo(f"Operación #{id_mov} borrada.")
+
+
+@app.command("importar-diario")
+def importar_diario() -> None:
+    """Carga las posiciones de mi_cartera.csv en el diario como compras (no duplica)."""
+    from monitor_mercado.notificaciones.telegram_bot import texto_importacion
+
+    ctx = _contexto()
+    ruta = ctx.cfg.cartera.ruta()
+    if not ruta.exists():
+        _salir_con_error(f"No encontré {ruta}.")
+    typer.echo(texto_importacion(*ctx.diario.importar_cartera(ruta)))
+
+
 @app.command()
 def glosario(termino: str | None = typer.Argument(None, help="Término a buscar (ej. rsi).")) -> None:
     """Definiciones de los términos que usa el sistema."""

@@ -96,6 +96,8 @@ class ConfigCartera(BaseModel):
     """Seguimiento de tu cartera real."""
 
     archivo: str = "mi_cartera.csv"
+    # De dónde salen tus posiciones: "archivo" (mi_cartera.csv) o "diario" (tus compras y ventas).
+    fuente: Literal["archivo", "diario"] = "archivo"
     resumen_diario: bool = True
     hora_resumen: str = Field("16:20", pattern=r"^\d{1,2}:\d{2}$")  # hora de Nueva York
     noticias_maximas: int = Field(8, ge=0, le=20)

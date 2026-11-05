@@ -561,6 +561,51 @@ rebalanceo:
 
 ---
 
+## 4j. Diario de operaciones
+
+Registrá cada compra y venta con su motivo. Con eso el sistema calcula cuánto ganaste de verdad (lo vendido)
+y qué tan seguido acertás.
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/compre AAPL 10 180,5 nota soporte semanal` | `monitor compre AAPL 10 180,5 nota soporte semanal` | Registra una compra |
+| `/vendi AAPL 5 210 comision 1,5 fecha 2026-11-03` | `monitor vendi AAPL 5 210 comision 1,5 fecha 2026-11-03` | Registra una venta |
+| `/diario` · `/diario AAPL` | `monitor diario [AAPL]` | Últimas operaciones y resultados |
+| `/editar_op 7 precio 181` | `monitor editar-op 7 precio 181` | Corrige un campo (fecha, simbolo, cantidad, precio, comision, moneda, nota) |
+| `/borrar_op 7` | `monitor borrar-op 7` | Borra una operación |
+| `/importar_diario` | `monitor importar-diario` | Carga tu `mi_cartera.csv` como compras, para no cargar todo de nuevo |
+
+- **Formato:** `SIMBOLO CANTIDAD PRECIO [comision X] [fecha AAAA-MM-DD o DD/MM/AAAA] [moneda ARS] [nota TEXTO]`.
+  El precio es por acción, en la moneda del activo (pesos para `.BA`; la moneda se deduce de la bolsa).
+  La fecha, por defecto, es hoy.
+- **Validación:** no deja vender más acciones de las que tenías en esa fecha, ni editar o borrar algo que
+  deje una venta posterior sin respaldo.
+- **Resultados (`/diario`):**
+  - **realizado:** lo que ganaste o perdiste con las ventas;
+  - **no realizado:** lo que ganás o perdés hoy con lo que seguís teniendo (a precio de mercado);
+  - **tasa de aciertos:** qué porcentaje de las ventas dio ganancia;
+  - **ganancia promedio vs. pérdida promedio**, y las **3 mejores y 3 peores** ventas.
+- **La cartera desde el diario:** con `fuente: diario` en `config.yaml → cartera`, `/cartera`, el resumen de
+  cierre, los stops y el rebalanceo usan las posiciones calculadas del diario en vez de `mi_cartera.csv`.
+  Lo recomendable: `/importar_diario` una vez, revisar con `/diario`, y recién ahí cambiar la fuente.
+- **Importar no duplica:** los símbolos que ya tienen operaciones en el diario se saltean. Las posiciones sin
+  precio de compra se importan igual; completalo después con `/editar_op ID precio X`.
+
+### Cómo se calcula
+
+**Costo promedio ponderado** (el que usan la mayoría de los brokers en Argentina): cada compra suma al costo
+(precio × cantidad + comisión); cada venta descuenta la parte proporcional y su resultado es lo cobrado
+(precio × cantidad − comisión) menos esa parte. Si vendés todo y volvés a comprar, el costo arranca de cero.
+
+### Limitaciones del diario
+
+- Los resultados en otra moneda (pesos, reales) se pasan a dólares **al tipo de cambio de hoy**, no al del día
+  de la operación: en pesos, con inflación, eso distorsiona el resultado.
+- No incluye impuestos, dividendos (ver más abajo), splits ni cauciones.
+- Una venta de una posición sin precio de compra no entra en las estadísticas (se avisa cuántas son).
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -614,6 +659,7 @@ creando software/
 │   ├── cartera/             tu cartera, valuación y resumen de cierre
 │   ├── stops/               stop-loss y trailing stop sobre la cartera
 │   ├── riesgo/              tamaño de posición y prueba de estrés
+│   ├── diario/              compras y ventas, costo promedio, resultado realizado
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

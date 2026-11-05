@@ -74,6 +74,10 @@ AYUDA = (
     "/stops - tus stops · /borrar_stop ID - borra uno\n"
     "/tamano SIMBOLO entrada 200 stop 185 riesgo 1% - cuántas acciones comprar según tu riesgo\n"
     "/rebalanceo - qué comprar o vender para volver a tus pesos objetivo (solo sugiere)\n"
+    "/compre SIMBOLO CANTIDAD PRECIO [comision X] [fecha AAAA-MM-DD] [nota TEXTO] - registra una compra\n"
+    "/vendi SIMBOLO CANTIDAD PRECIO [...] - registra una venta\n"
+    "/diario [SIMBOLO] - tus operaciones y resultados (realizado, aciertos, mejores y peores)\n"
+    "/editar_op ID CAMPO VALOR · /borrar_op ID · /importar_diario (carga mi_cartera.csv)\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -84,6 +88,9 @@ COMANDOS_MENU = [
     BotCommand("stops", "Tus stop-loss y trailing stops"),
     BotCommand("tamano", "Cuántas acciones comprar según tu riesgo"),
     BotCommand("rebalanceo", "Volver a tus pesos objetivo"),
+    BotCommand("diario", "Tus operaciones y resultados"),
+    BotCommand("compre", "Registrar una compra"),
+    BotCommand("vendi", "Registrar una venta"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -485,6 +492,111 @@ async def cmd_rebalanceo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await _responder(update, texto_rebalanceo(plan))
 
 
+async def _registrar(update: Update, context: ContextTypes.DEFAULT_TYPE, tipo_txt: str) -> None:
+    from monitor_mercado.diario.calculo import ErrorDiario
+    from monitor_mercado.diario.modelos import TipoMovimiento
+    from monitor_mercado.diario.parser import parsear_movimiento
+    from monitor_mercado.diario.reporte import texto_registrado
+
+    tipo = TipoMovimiento.COMPRA if tipo_txt == "compre" else TipoMovimiento.VENTA
+    try:
+        solicitud = parsear_movimiento(context.args or [])
+        mov = await asyncio.to_thread(_ctx(context).diario.registrar, tipo, solicitud)
+    except (ErrorFormato, ErrorDiario) as e:
+        await _responder(update, str(e))
+        return
+    await _responder(update, texto_registrado(mov))
+
+
+async def cmd_compre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/compre SIMBOLO CANTIDAD PRECIO ...: registra una compra en el diario."""
+    await _registrar(update, context, "compre")
+
+
+async def cmd_vendi(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/vendi SIMBOLO CANTIDAD PRECIO ...: registra una venta en el diario."""
+    await _registrar(update, context, "vendi")
+
+
+def texto_diario_completo(ctx: Contexto, simbolo: str | None = None) -> str:
+    """Diario + estadísticas, con el resultado no realizado de la cartera (si se puede calcular)."""
+    from monitor_mercado.diario.reporte import texto_diario
+
+    no_realizado = None
+    if ctx.cartera is not None and not simbolo:
+        try:
+            no_realizado = ctx.cartera.estado().resultado
+        except Exception:  # noqa: BLE001 - sin precios igual se muestra el diario
+            log.warning("No se pudo valuar la cartera para el diario")
+    estadisticas = ctx.diario.estadisticas(no_realizado) if not simbolo else None
+    return texto_diario(ctx.diario.repo.listar(simbolo), estadisticas)
+
+
+async def cmd_diario(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/diario [SIMBOLO]: operaciones y resultados."""
+    simbolo = (context.args or [None])[0]
+    texto = await asyncio.to_thread(texto_diario_completo, _ctx(context), simbolo.upper() if simbolo else None)
+    await _responder(update, texto)
+
+
+async def cmd_editar_op(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/editar_op ID CAMPO VALOR: corrige una operación."""
+    from monitor_mercado.diario.calculo import ErrorDiario
+    from monitor_mercado.diario.parser import parsear_edicion
+    from monitor_mercado.diario.reporte import linea_movimiento
+
+    try:
+        id_mov, campo, valor = parsear_edicion(context.args or [])
+        mov = await asyncio.to_thread(_ctx(context).diario.editar, id_mov, campo, valor)
+    except (ErrorFormato, ErrorDiario) as e:
+        await _responder(update, str(e))
+        return
+    except KeyError as e:
+        await _responder(update, f"No existe la operación #{e.args[0]}.")
+        return
+    await _responder(update, "Operación corregida:\n" + linea_movimiento(mov))
+
+
+async def cmd_borrar_op(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/borrar_op ID: borra una operación del diario."""
+    from monitor_mercado.diario.calculo import ErrorDiario
+
+    try:
+        id_mov = int((context.args or [""])[0].lstrip("#"))
+    except ValueError:
+        await _responder(update, "Uso: /borrar_op ID (el número que aparece en /diario)")
+        return
+    try:
+        ok = await asyncio.to_thread(_ctx(context).diario.borrar, id_mov)
+    except ErrorDiario as e:
+        await _responder(update, f"No se puede borrar: {e}")
+        return
+    await _responder(update, f"Operación #{id_mov} borrada." if ok else f"No existe la operación #{id_mov}.")
+
+
+async def cmd_importar_diario(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/importar_diario: carga mi_cartera.csv en el diario como compras."""
+    ctx = _ctx(context)
+    ruta = ctx.cfg.cartera.ruta()
+    if not ruta.exists():
+        await _responder(update, f"No encontré {ruta.name}.")
+        return
+    importadas, salteadas = await asyncio.to_thread(ctx.diario.importar_cartera, ruta)
+    await _responder(update, texto_importacion(importadas, salteadas))
+
+
+def texto_importacion(importadas, salteadas) -> str:
+    texto = f"Importé {len(importadas)} posición(es) de tu cartera como compras."
+    sin_precio = [m.simbolo for m in importadas if m.precio is None]
+    if sin_precio:
+        texto += f"\nSin precio de compra (cargalo con /editar_op ID precio X): {', '.join(sin_precio)}."
+    if salteadas:
+        texto += f"\nYa tenían operaciones en el diario, no las toqué: {', '.join(salteadas)}."
+    texto += ("\n\nPara que /cartera use el diario en vez del archivo, poné 'fuente: diario' en config.yaml "
+              "(sección cartera).")
+    return texto
+
+
 def hubo_rueda_hoy(ctx: Contexto, hoy) -> bool:
     """True si hoy operó Wall Street (descarta fines de semana y feriados)."""
     if hoy.weekday() >= 5:
@@ -658,6 +770,12 @@ def construir_bot(ctx: Contexto) -> Application:
         (["borrar_stop"], cmd_borrar_stop),
         (["tamano"], con_simbolo(cmd_tamano)),  # Telegram no admite la ñ en comandos
         (["rebalanceo"], cmd_rebalanceo),
+        (["compre", "compra"], con_simbolo(cmd_compre)),
+        (["vendi", "venta"], con_simbolo(cmd_vendi)),
+        (["diario"], cmd_diario),
+        (["editar_op"], cmd_editar_op),
+        (["borrar_op"], cmd_borrar_op),
+        (["importar_diario"], cmd_importar_diario),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

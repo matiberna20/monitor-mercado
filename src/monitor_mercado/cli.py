@@ -349,7 +349,21 @@ def cartera() -> None:
     from monitor_mercado.cartera.reporte import texto_cartera
 
     ctx = _contexto()
-    typer.echo(texto_cartera(ctx.cartera.estado()))
+    estado = ctx.cartera.estado()
+    typer.echo(texto_cartera(estado, ctx.rendimiento(estado)))
+
+
+@app.command()
+def dividendos() -> None:
+    """Dividendos de tu cartera: próximos cobros, cobrados en el último año y rendimiento total."""
+    from monitor_mercado.dividendos.reporte import texto_dividendos
+
+    ctx = _contexto()
+    try:
+        resumen = ctx.dividendos.resumen()
+    except Exception as e:  # noqa: BLE001
+        _salir_con_error(f"No se pudieron consultar los dividendos: {e}")
+    typer.echo(texto_dividendos(resumen, ctx.rendimiento(ctx.cartera.estado())))
 
 
 @app.command("resumen-dia")
@@ -361,7 +375,8 @@ def resumen_dia(
     from monitor_mercado.cartera.reporte import texto_resumen_dia
 
     ctx = _contexto()
-    texto = texto_resumen_dia(ctx.cartera.resumen_dia(not sin_noticias), ctx.cfg.cartera.umbral_movimiento)
+    resumen = ctx.cartera.resumen_dia(not sin_noticias)
+    texto = texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento, ctx.rendimiento(resumen.estado))
     typer.echo(texto)
     if enviar and ctx.secretos.telegram_configurado:
         from monitor_mercado.notificaciones.telegram_bot import partir_mensaje

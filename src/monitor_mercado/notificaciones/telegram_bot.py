@@ -78,6 +78,7 @@ AYUDA = (
     "/vendi SIMBOLO CANTIDAD PRECIO [...] - registra una venta\n"
     "/diario [SIMBOLO] - tus operaciones y resultados (realizado, aciertos, mejores y peores)\n"
     "/editar_op ID CAMPO VALOR · /borrar_op ID · /importar_diario (carga mi_cartera.csv)\n"
+    "/dividendos - próximos cobros, cobrados en el último año y rendimiento total\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -91,6 +92,7 @@ COMANDOS_MENU = [
     BotCommand("diario", "Tus operaciones y resultados"),
     BotCommand("compre", "Registrar una compra"),
     BotCommand("vendi", "Registrar una venta"),
+    BotCommand("dividendos", "Dividendos: próximos y cobrados"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -402,7 +404,14 @@ async def cmd_cartera(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     ctx = _ctx(context)
     await _responder(update, "Valuando tu cartera...")
     estado = await asyncio.to_thread(ctx.cartera.estado)
-    await _responder(update, texto_cartera(estado))
+    rendimiento = await asyncio.to_thread(_rendimiento_de, ctx, estado)
+    await _responder(update, texto_cartera(estado, rendimiento))
+
+
+def _rendimiento_de(ctx, estado):
+    """Rendimiento total con dividendos (None si no está disponible)."""
+    calcular = getattr(ctx, "rendimiento", None)
+    return calcular(estado) if calcular else None
 
 
 async def cmd_resumen_dia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -410,7 +419,25 @@ async def cmd_resumen_dia(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     ctx = _ctx(context)
     await _responder(update, "Armando el resumen (precios y noticias de tus empresas)...")
     resumen = await asyncio.to_thread(ctx.cartera.resumen_dia)
-    await _responder(update, texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento))
+    rendimiento = await asyncio.to_thread(_rendimiento_de, ctx, resumen.estado)
+    await _responder(update, texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento, rendimiento))
+
+
+async def cmd_dividendos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/dividendos: próximos cobros y cobrados en el último año."""
+    from monitor_mercado.dividendos.reporte import texto_dividendos
+
+    ctx = _ctx(context)
+    await _responder(update, "Buscando los dividendos de tus posiciones...")
+    try:
+        resumen = await asyncio.to_thread(ctx.dividendos.resumen)
+    except Exception as e:  # noqa: BLE001 - fuente caída: aviso claro
+        log.exception("Error consultando dividendos")
+        await _responder(update, f"No se pudieron consultar los dividendos ahora: {e}")
+        return
+    estado = await asyncio.to_thread(ctx.cartera.estado)
+    rendimiento = await asyncio.to_thread(_rendimiento_de, ctx, estado)
+    await _responder(update, texto_dividendos(resumen, rendimiento))
 
 
 async def _crear_stop(update: Update, context: ContextTypes.DEFAULT_TYPE, tipo_txt: str) -> None:
@@ -623,7 +650,8 @@ async def tarea_resumen_dia(context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception:  # noqa: BLE001 - no debe tirar el bot
         log.exception("Error armando el resumen diario")
         return
-    for parte in partir_mensaje(texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento)):
+    rendimiento = await asyncio.to_thread(_rendimiento_de, ctx, resumen.estado)
+    for parte in partir_mensaje(texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento, rendimiento)):
         await _enviar(context, context.application.bot_data["chat_id"], parte)
 
 
@@ -776,6 +804,7 @@ def construir_bot(ctx: Contexto) -> Application:
         (["editar_op"], cmd_editar_op),
         (["borrar_op"], cmd_borrar_op),
         (["importar_diario"], cmd_importar_diario),
+        (["dividendos"], cmd_dividendos),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

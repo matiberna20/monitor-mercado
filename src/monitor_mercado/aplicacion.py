@@ -14,6 +14,8 @@ from monitor_mercado.datos.yahoo import ProveedorYahoo
 from monitor_mercado.db import crear_motor
 from monitor_mercado.diario.repositorio import RepositorioDiario
 from monitor_mercado.diario.servicio import ServicioDiario
+from monitor_mercado.dividendos.fuente import FuenteDividendosYahoo
+from monitor_mercado.dividendos.servicio import ServicioDividendos
 from monitor_mercado.noticias.fuentes import (
     Finnhub, FuenteNoticias, GoogleNewsRSS, Marketaux, NewsAPI, SecEdgar, YahooRSS,
 )
@@ -64,6 +66,7 @@ class Contexto:
     stops: ServicioStops | None = None
     tamano: ServicioTamano | None = None
     diario: ServicioDiario | None = None
+    dividendos: ServicioDividendos | None = None
 
     def buscador(self) -> BuscadorSimbolos:
         """Buscador con tu watchlist, tu cartera y las empresas que seguís (se arma al momento)."""
@@ -76,6 +79,16 @@ class Contexto:
         if self.resultados is not None:
             simbolos += self.resultados.repo.seguidas()
         return BuscadorSimbolos(simbolos, self.nombres.conocidos() if self.nombres else {})
+
+    def rendimiento(self, estado):
+        """Rendimiento total con dividendos, o None si falla la fuente (la cartera se muestra igual)."""
+        if self.dividendos is None:
+            return None
+        try:
+            return self.dividendos.rendimiento_total(estado)
+        except Exception:  # noqa: BLE001 - los dividendos son un complemento
+            log.exception("No se pudieron calcular los dividendos")
+            return None
 
     def analisis_completo(self, simbolo: str) -> AnalisisCompleto:
         """Análisis técnico + noticias + señal final.
@@ -172,4 +185,5 @@ def armar_contexto() -> Contexto:
         stops=ServicioStops(RepositorioStops(motor), proveedor, cfg, cartera),
         tamano=ServicioTamano(proveedor, cfg, cartera),
         diario=diario,
+        dividendos=ServicioDividendos(FuenteDividendosYahoo(), proveedor, cfg, cartera, diario),
     )

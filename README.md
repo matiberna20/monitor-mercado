@@ -606,6 +606,34 @@ y qué tan seguido acertás.
 
 ---
 
+## 4k. Dividendos y rendimiento total
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/dividendos` | `monitor dividendos` | Próximos cobros, cobrados en los últimos 12 meses y rendimiento total |
+| `/cartera` · `/resumen_dia` | `monitor cartera` · `monitor resumen-dia` | Suman los dividendos y el **rendimiento total** |
+
+- **Rendimiento total = variación del precio + dividendos cobrados desde la compra.** Aparece en `/cartera`
+  y en el resumen de cierre cuando hay dividendos.
+- **Cuándo se cobra:** si tenías la acción **antes de la fecha ex**. La cantidad que tenías en esa fecha sale
+  del diario (si el símbolo tiene operaciones cargadas); si no, se usa la cantidad actual desde la
+  `fecha_compra` de `mi_cartera.csv`. Sin fecha de compra se toman los últimos 12 meses, y el reporte lo dice.
+- **Próximos cobros:** si la empresa anunció el próximo dividendo, se usan sus fechas. Si no, se **estima** la
+  fecha por la frecuencia de los últimos pagos (y se marca como estimada). El monto es el del último pago.
+- **Monedas:** los dividendos vienen en la moneda en que cotiza el activo y se pasan a USD al tipo de
+  cambio de hoy.
+
+### Limitaciones de los dividendos
+
+- **No incluye impuestos ni retenciones.** En EE.UU. suelen retener el 30% a no residentes, así que lo que
+  cobrás de verdad es menos.
+- Yahoo a veces no tiene el calendario anunciado; en ese caso la fecha es una estimación.
+- Las consultas se guardan en memoria 12 horas: un dividendo recién anunciado puede tardar en aparecer.
+- Si Yahoo no responde, `/cartera` se muestra igual, sin la línea de dividendos, y `/dividendos` avisa qué
+  símbolos no se pudieron consultar.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -660,6 +688,7 @@ creando software/
 │   ├── stops/               stop-loss y trailing stop sobre la cartera
 │   ├── riesgo/              tamaño de posición y prueba de estrés
 │   ├── diario/              compras y ventas, costo promedio, resultado realizado
+│   ├── dividendos/          dividendos cobrados y próximos, rendimiento total
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

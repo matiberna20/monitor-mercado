@@ -42,12 +42,25 @@ def _encabezado(e: EstadoCartera) -> list[str]:
     return lineas
 
 
-def texto_cartera(e: EstadoCartera) -> str:
-    """Estado completo, una línea por posición (de mayor a menor peso)."""
+def _rendimiento(rendimiento) -> list[str]:
+    """Líneas de dividendos y rendimiento total (vacío si no hay datos)."""
+    if rendimiento is None:
+        return []
+    from monitor_mercado.dividendos.reporte import lineas_rendimiento
+
+    return lineas_rendimiento(rendimiento)
+
+
+def texto_cartera(e: EstadoCartera, rendimiento=None) -> str:
+    """Estado completo, una línea por posición (de mayor a menor peso).
+
+    Args:
+        rendimiento: ``RendimientoTotal`` con los dividendos (opcional).
+    """
     if not e.posiciones:
         return "Todavía no cargaste tu cartera (archivo mi_cartera.csv, o el diario si cartera.fuente es 'diario')."
-    lineas = [f"📋 Tu cartera ({e.momento.astimezone(AR):%d/%m %H:%M} hora Argentina)", *_encabezado(e), "",
-              "Símbolo · hoy · desde la compra · peso"]
+    lineas = [f"📋 Tu cartera ({e.momento.astimezone(AR):%d/%m %H:%M} hora Argentina)", *_encabezado(e),
+              *_rendimiento(rendimiento), "", "Símbolo · hoy · desde la compra · peso"]
     for f in sorted(e.posiciones, key=lambda f: -(f.valor or 0)):
         if f.precio is None:
             lineas.append(f"⚪ {f.simbolo}: sin precio disponible")
@@ -118,12 +131,13 @@ def _linea_movimiento(f: EstadoPosicion) -> str:
     return f"{_icono(f.variacion_dia)} {f.simbolo} {pct(f.variacion_dia)} ({usd(f.resultado_dia, True)})"
 
 
-def texto_resumen_dia(r: ResumenDia, umbral_movimiento: float = 0.05) -> str:
+def texto_resumen_dia(r: ResumenDia, umbral_movimiento: float = 0.05, rendimiento=None) -> str:
     """Resumen de cierre: cómo le fue a la cartera, cada acción y las noticias importantes."""
     e = r.estado
     lineas = [f"🔔 Resumen de tu cartera – {e.momento.astimezone(AR):%d/%m/%Y %H:%M}", *_encabezado(e)]
     if r.variacion_semana is not None:
         lineas.append(f"📅 Últimos 7 días: {pct(r.variacion_semana)}")
+    lineas += _rendimiento(rendimiento)
 
     con_precio = [f for f in e.posiciones if f.variacion_dia is not None]
     ordenadas = sorted(con_precio, key=lambda f: -(f.variacion_dia or 0))

@@ -268,6 +268,18 @@ cartera:
   stop_loss_por_defecto:      # ej. 15 = avisa si cae 15% desde tu precio de compra
   trailing_por_defecto:       # ej. 20 = avisa si cae 20% desde su máximo
 
+rebalanceo:
+  # Solo sugiere compras o ventas si un peso se desvía más que esto del objetivo (0.05 = 5 puntos).
+  tolerancia: 0.05
+  # Peso objetivo (0.20 = 20%) por símbolo o por grupo. Vacío = sin rebalanceo.
+  # Los grupos de cada bolsa existen solos: "EE.UU.", "BYMA", "B3", "Xetra", "Londres".
+  objetivos: {}
+  #   NUGT: 0.20
+  #   Argentina: 0.25
+  # Grupos propios (opcional): un símbolo que no está acá pertenece al grupo de su bolsa.
+  grupos: {}
+  #   Argentina: [GGAL, BMA, YPF, VIST, TS]
+
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).
   canal: telegram

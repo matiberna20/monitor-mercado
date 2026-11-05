@@ -5,6 +5,7 @@ from __future__ import annotations
 from zoneinfo import ZoneInfo
 
 from monitor_mercado.aviso_legal import pie_de_mensaje
+from monitor_mercado.cartera.rebalanceo import PlanRebalanceo
 from monitor_mercado.cartera.servicio import EstadoCartera, EstadoPosicion, ResumenDia
 from monitor_mercado.notificaciones.formato import numero
 
@@ -66,6 +67,51 @@ def _notas(e: EstadoCartera) -> list[str]:
     if e.sin_precio:
         notas.append(f"⚠️ Sin cotización: {', '.join(e.sin_precio)}.")
     return [""] + notas if notas else []
+
+
+def texto_rebalanceo(plan: PlanRebalanceo) -> str:
+    """Sugerencias de compra y venta para volver a los pesos objetivo."""
+    if not plan.ajustes and not plan.desconocidos:
+        return ("No definiste pesos objetivo. Agregalos en config.yaml, en la sección 'rebalanceo' "
+                "(ver README).")
+    tol = numero(100 * plan.tolerancia, 0)
+    lineas = [f"⚖️ Rebalanceo (cartera: {usd(plan.valor_total)}, tolerancia ±{tol} puntos)", "",
+              "Clave · actual → objetivo"]
+    for a in plan.ajustes:
+        nombre = f"{a.clave} (grupo: {', '.join(a.simbolos) or 'sin posiciones'})" if a.es_grupo else a.clave
+        base = f"{nombre} · {numero(100 * a.peso_actual, 1)}% → {numero(100 * a.peso_objetivo, 1)}%"
+        if not a.fuera_de_tolerancia:
+            lineas.append(f"✅ {base} · dentro de la tolerancia")
+            continue
+        verbo = "comprar" if a.monto > 0 else "vender"
+        detalle = f"{verbo} {usd(abs(a.monto))}"
+        if a.acciones is not None:
+            detalle += f" (~{numero(abs(a.acciones), 2 if abs(a.acciones) < 10 else 0)} acciones)"
+        lineas.append(f"{'🟢' if a.monto > 0 else '🔴'} {base} · {detalle} · comisión ~{usd(a.comision)}")
+
+    if plan.a_ejecutar:
+        compras = sum(a.monto for a in plan.a_ejecutar if a.monto > 0)
+        ventas = -sum(a.monto for a in plan.a_ejecutar if a.monto < 0)
+        lineas += ["", f"Total: comprar {usd(compras)}, vender {usd(ventas)}, comisiones ~{usd(plan.comision_total)}."]
+        if abs(compras - ventas) > 0.01 * plan.valor_total:
+            lineas.append("Las compras y las ventas no se compensan: la diferencia sale de (o va a) lo que no "
+                          "tiene objetivo o del efectivo.")
+    else:
+        lineas += ["", "Todo está dentro de la tolerancia: no hace falta rebalancear."]
+
+    notas = []
+    if plan.peso_sin_objetivo > 0.001:
+        notas.append(f"ℹ️ El {numero(100 * plan.peso_sin_objetivo, 1)}% de la cartera no tiene objetivo y no se toca.")
+    if plan.suma_objetivos < 0.999 and plan.peso_sin_objetivo <= 0.001:
+        notas.append(f"ℹ️ Los objetivos suman {numero(100 * plan.suma_objetivos, 1)}%: el resto quedaría en efectivo.")
+    if plan.desconocidos:
+        notas.append(f"⚠️ No encontré en tu cartera ni en tus grupos: {', '.join(plan.desconocidos)}.")
+    if plan.superpuestos:
+        notas.append(f"⚠️ Aparecen en más de un objetivo (se cuentan dos veces): {', '.join(plan.superpuestos)}.")
+    lineas += ([""] + notas if notas else [])
+    lineas += ["", "Solo es una sugerencia: no se ejecuta nada. Las comisiones son las de referencia del backtest "
+               "(config.yaml → backtest.comisiones); no incluye impuestos ni el spread."]
+    return "\n".join(lineas) + pie_de_mensaje()
 
 
 def _linea_movimiento(f: EstadoPosicion) -> str:

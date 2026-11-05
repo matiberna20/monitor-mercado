@@ -73,6 +73,7 @@ AYUDA = (
     "/trailing SIMBOLO 8 - avisa si cae 8% desde su máximo desde que la tenés\n"
     "/stops - tus stops · /borrar_stop ID - borra uno\n"
     "/tamano SIMBOLO entrada 200 stop 185 riesgo 1% - cuántas acciones comprar según tu riesgo\n"
+    "/rebalanceo - qué comprar o vender para volver a tus pesos objetivo (solo sugiere)\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -82,6 +83,7 @@ COMANDOS_MENU = [
     BotCommand("resumen_dia", "Resumen de cierre de tu cartera"),
     BotCommand("stops", "Tus stop-loss y trailing stops"),
     BotCommand("tamano", "Cuántas acciones comprar según tu riesgo"),
+    BotCommand("rebalanceo", "Volver a tus pesos objetivo"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -474,6 +476,15 @@ async def cmd_tamano(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await _responder(update, texto_tamano(calculo))
 
 
+async def cmd_rebalanceo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/rebalanceo: sugerencias para volver a los pesos objetivo."""
+    from monitor_mercado.cartera.reporte import texto_rebalanceo
+
+    await _responder(update, "Comparando tu cartera con los pesos objetivo...")
+    plan = await asyncio.to_thread(_ctx(context).cartera.rebalanceo)
+    await _responder(update, texto_rebalanceo(plan))
+
+
 def hubo_rueda_hoy(ctx: Contexto, hoy) -> bool:
     """True si hoy operó Wall Street (descarta fines de semana y feriados)."""
     if hoy.weekday() >= 5:
@@ -646,6 +657,7 @@ def construir_bot(ctx: Contexto) -> Application:
         (["stops"], cmd_stops),
         (["borrar_stop"], cmd_borrar_stop),
         (["tamano"], con_simbolo(cmd_tamano)),  # Telegram no admite la ñ en comandos
+        (["rebalanceo"], cmd_rebalanceo),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

@@ -448,6 +448,15 @@ def tamano(
 
 
 @app.command()
+def rebalanceo() -> None:
+    """Qué comprar o vender para volver a los pesos objetivo de config.yaml (solo sugiere)."""
+    from monitor_mercado.cartera.reporte import texto_rebalanceo
+
+    ctx = _contexto()
+    typer.echo(texto_rebalanceo(ctx.cartera.rebalanceo()))
+
+
+@app.command()
 def glosario(termino: str | None = typer.Argument(None, help="Término a buscar (ej. rsi).")) -> None:
     """Definiciones de los términos que usa el sistema."""
     typer.echo(texto_glosario(termino))

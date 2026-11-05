@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -20,6 +21,9 @@ from monitor_mercado.datos.proveedor import ProveedorPrecios
 from monitor_mercado.db import Base
 from monitor_mercado.noticias.fuentes import FuenteNoticias
 from monitor_mercado.noticias.nombres import ResolutorNombres
+
+if TYPE_CHECKING:
+    from monitor_mercado.cartera.rebalanceo import PlanRebalanceo
 
 log = logging.getLogger(__name__)
 NY = ZoneInfo("America/New_York")
@@ -154,6 +158,12 @@ class ServicioCartera:
             sin_costo=[f.simbolo for f in filas if f.precio is not None and f.resultado is None],
             momento=datetime.now(timezone.utc),
         )
+
+    def rebalanceo(self) -> "PlanRebalanceo":
+        """Qué comprar o vender para volver a los pesos objetivo de config.yaml (solo sugiere)."""
+        from monitor_mercado.cartera.rebalanceo import planificar
+
+        return planificar(self.estado(), self._cfg)
 
     # ------------------------------------------------------------- historial
     def guardar_foto(self, estado: EstadoCartera, dia: date) -> None:

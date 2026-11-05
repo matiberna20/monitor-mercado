@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # src/monitor_mercado/configuracion.py -> la raíz del proyecto está dos niveles arriba.
@@ -110,6 +110,24 @@ class ConfigCartera(BaseModel):
         return _absoluta(self.archivo)
 
 
+class ConfigRebalanceo(BaseModel):
+    """Pesos objetivo de la cartera (por símbolo o por grupo)."""
+
+    tolerancia: float = Field(0.05, ge=0, lt=1)  # 0.05 = solo avisar si te desviás más de 5 puntos
+    objetivos: dict[str, float] = Field(default_factory=dict)
+    grupos: dict[str, list[str]] = Field(default_factory=dict)
+
+    @field_validator("objetivos")
+    @classmethod
+    def _pesos_validos(cls, v: dict[str, float]) -> dict[str, float]:
+        for clave, peso in v.items():
+            if not 0 <= peso <= 1:
+                raise ValueError(f"rebalanceo.objetivos.{clave}: el peso va de 0 a 1 (0.20 = 20%)")
+        if sum(v.values()) > 1 + 1e-9:
+            raise ValueError("rebalanceo.objetivos: los pesos suman más de 1 (100%)")
+        return v
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -169,6 +187,7 @@ class Configuracion(BaseModel):
     resultados: ConfigResultados = Field(default_factory=ConfigResultados)
     backtest: ConfigBacktest = Field(default_factory=ConfigBacktest)
     cartera: ConfigCartera = Field(default_factory=ConfigCartera)
+    rebalanceo: ConfigRebalanceo = Field(default_factory=ConfigRebalanceo)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 

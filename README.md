@@ -523,6 +523,44 @@ se calcula con lo que alcanza.
 
 ---
 
+## 4i. Rebalanceo
+
+Compara los pesos de hoy con los que querés y te dice **qué comprar o vender, y cuánto**, para volver al
+objetivo. **No ejecuta nada:** solo sugiere.
+
+| Telegram | Terminal |
+|---|---|
+| `/rebalanceo` | `monitor rebalanceo` |
+
+Los objetivos van en `config.yaml`:
+
+```yaml
+rebalanceo:
+  tolerancia: 0.05          # solo avisa si te desviás más de 5 puntos
+  objetivos:
+    NUGT: 0.20              # un símbolo
+    Argentina: 0.25         # un grupo propio
+    EE.UU.: 0.50            # el grupo de una bolsa
+  grupos:
+    Argentina: [GGAL, BMA, YPF, VIST, TS]
+```
+
+- Cada objetivo puede ser un **símbolo** o un **grupo**. Los grupos de cada bolsa (`EE.UU.`, `BYMA`, `B3`,
+  `Xetra`, `Londres`) existen solos; un símbolo que está en un grupo propio deja de contar en el de su bolsa.
+- Lo que **no tiene objetivo no se toca** (el reporte dice cuánto pesa).
+- Para los símbolos dice también la cantidad aproximada de acciones; para los grupos, solo el monto (vos
+  elegís dentro del grupo).
+- Estima las **comisiones** con las de referencia del backtest (`backtest.comisiones`) según la bolsa.
+
+### Limitaciones del rebalanceo
+
+- Usa los precios del momento (con demora) y el CCL para lo que está en pesos.
+- No considera impuestos, spread, ni montos mínimos o lotes de cada broker.
+- Si un símbolo entra en dos objetivos (por ejemplo, `GGAL` y un grupo que lo incluye), se cuenta dos veces:
+  el reporte lo advierte.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen

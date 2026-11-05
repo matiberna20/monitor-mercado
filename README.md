@@ -634,6 +634,42 @@ y qué tan seguido acertás.
 
 ---
 
+## 4l. Prueba de estrés
+
+¿Cuánto perdería tu cartera si el mercado se cae o el dólar se dispara?
+
+| Telegram | Terminal |
+|---|---|
+| `/estres` | `monitor estres` |
+
+**Escenarios** (configurables en `config.yaml → estres`):
+
+| Escenario | Cómo se estima |
+|---|---|
+| Mercado −10%, −20%, −30% | Pérdida de cada posición = valor × **beta** × caída |
+| Dólar +30% | Lo que cotiza en pesos pierde 1 − 1/1,3 ≈ 23% medido en dólares |
+
+- **Beta:** cuánto se movió históricamente cada acción cuando el mercado se movió 1%. Se mide contra **SPY**
+  lo que cotiza afuera y contra el **Merval** lo que cotiza en BYMA, con retornos **semanales** de los últimos
+  2 años (semanales porque cada bolsa cierra a otra hora).
+- **Correlaciones:** con la matriz de covarianzas se calcula la volatilidad de toda la cartera, un **"mes malo"
+  (1 de cada 20 meses, VaR 95%)** y **cuánto aporta cada posición al riesgo**. Una acción que se mueve junto
+  con el resto aporta más riesgo que su peso; una que se mueve distinto, menos.
+- El reporte muestra la pérdida en % y en US$, las 3 posiciones que más aportan en cada escenario y la beta
+  de cada una.
+- Usa los mismos históricos que el análisis técnico (`data/historico/`): la primera vez tarda un poco más.
+
+### Limitaciones de la prueba de estrés
+
+- **Es una estimación, no una predicción.** Supone que cada acción repite su relación histórica con el mercado.
+- En las crisis las correlaciones suben (todo cae junto) y las caídas suelen ser peores que lo que dice la beta.
+- No contempla noticias propias de cada empresa ni movimientos de sector.
+- Para lo que cotiza en pesos supone el peor caso: que el precio en pesos no acompaña al dólar. Los CEDEARs, en
+  la práctica, suben con el CCL y compensan buena parte.
+- Las posiciones sin historia suficiente usan beta 1 (el reporte lo marca).
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen

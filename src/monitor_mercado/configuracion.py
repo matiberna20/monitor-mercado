@@ -130,6 +130,16 @@ class ConfigRebalanceo(BaseModel):
         return v
 
 
+class ConfigEstres(BaseModel):
+    """Escenarios de la prueba de estrés."""
+
+    indice_eeuu: str = "SPY"  # contra qué se mide la beta de lo que cotiza afuera
+    indice_local: str = "^MERV"  # y de lo que cotiza en BYMA
+    semanas: int = Field(104, ge=26, le=520)  # historia para betas y correlaciones
+    caidas_mercado: list[float] = Field(default_factory=lambda: [0.10, 0.20, 0.30])
+    suba_dolar: float = Field(0.30, gt=0, le=5)
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -190,6 +200,7 @@ class Configuracion(BaseModel):
     backtest: ConfigBacktest = Field(default_factory=ConfigBacktest)
     cartera: ConfigCartera = Field(default_factory=ConfigCartera)
     rebalanceo: ConfigRebalanceo = Field(default_factory=ConfigRebalanceo)
+    estres: ConfigEstres = Field(default_factory=ConfigEstres)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 

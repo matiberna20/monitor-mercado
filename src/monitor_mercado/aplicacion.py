@@ -30,6 +30,7 @@ from monitor_mercado.resultados.repositorio import RepositorioResultados
 from monitor_mercado.resultados.servicio import ServicioResultados
 from monitor_mercado.resultados.valuacion import CacheInfo
 from monitor_mercado.senal_final import SenalFinal, combinar
+from monitor_mercado.riesgo.estres import ServicioEstres
 from monitor_mercado.riesgo.tamano import ServicioTamano
 from monitor_mercado.simbolos import BuscadorSimbolos
 from monitor_mercado.stops.repositorio import RepositorioStops
@@ -67,6 +68,7 @@ class Contexto:
     tamano: ServicioTamano | None = None
     diario: ServicioDiario | None = None
     dividendos: ServicioDividendos | None = None
+    estres: ServicioEstres | None = None
 
     def buscador(self) -> BuscadorSimbolos:
         """Buscador con tu watchlist, tu cartera y las empresas que seguís (se arma al momento)."""
@@ -186,4 +188,5 @@ def armar_contexto() -> Contexto:
         tamano=ServicioTamano(proveedor, cfg, cartera),
         diario=diario,
         dividendos=ServicioDividendos(FuenteDividendosYahoo(), proveedor, cfg, cartera, diario),
+        estres=ServicioEstres(almacen, cartera, proveedor, cfg),
     )

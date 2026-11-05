@@ -79,6 +79,7 @@ AYUDA = (
     "/diario [SIMBOLO] - tus operaciones y resultados (realizado, aciertos, mejores y peores)\n"
     "/editar_op ID CAMPO VALOR · /borrar_op ID · /importar_diario (carga mi_cartera.csv)\n"
     "/dividendos - próximos cobros, cobrados en el último año y rendimiento total\n"
+    "/estres - cuánto perdería tu cartera si el mercado cae 10/20/30% o el dólar sube 30%\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -93,6 +94,7 @@ COMANDOS_MENU = [
     BotCommand("compre", "Registrar una compra"),
     BotCommand("vendi", "Registrar una venta"),
     BotCommand("dividendos", "Dividendos: próximos y cobrados"),
+    BotCommand("estres", "Prueba de estrés de tu cartera"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -421,6 +423,20 @@ async def cmd_resumen_dia(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     resumen = await asyncio.to_thread(ctx.cartera.resumen_dia)
     rendimiento = await asyncio.to_thread(_rendimiento_de, ctx, resumen.estado)
     await _responder(update, texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento, rendimiento))
+
+
+async def cmd_estres(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/estres: escenarios de caída del mercado y suba del dólar."""
+    from monitor_mercado.riesgo.reporte import texto_estres
+
+    await _responder(update, "Simulando escenarios (la primera vez baja el historial de cada acción, puede tardar)...")
+    try:
+        resultado = await asyncio.to_thread(_ctx(context).estres.correr)
+    except Exception as e:  # noqa: BLE001 - fuente caída: aviso claro
+        log.exception("Error en la prueba de estrés")
+        await _responder(update, f"No se pudo correr la prueba de estrés: {e}")
+        return
+    await _responder(update, texto_estres(resultado))
 
 
 async def cmd_dividendos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -805,6 +821,7 @@ def construir_bot(ctx: Contexto) -> Application:
         (["borrar_op"], cmd_borrar_op),
         (["importar_diario"], cmd_importar_diario),
         (["dividendos"], cmd_dividendos),
+        (["estres"], cmd_estres),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

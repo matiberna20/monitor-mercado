@@ -282,6 +282,16 @@ rebalanceo:
   grupos: {}
   #   Argentina: [GGAL, BMA, YPF, VIST, TS]
 
+estres:
+  # Contra qué índice se mide la beta: lo que cotiza afuera y lo que cotiza en BYMA.
+  indice_eeuu: SPY
+  indice_local: ^MERV
+  # Semanas de historia para betas y correlaciones (104 = 2 años).
+  semanas: 104
+  # Escenarios: caídas del mercado y suba del dólar (0.30 = 30%).
+  caidas_mercado: [0.10, 0.20, 0.30]
+  suba_dolar: 0.30
+
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).
   canal: telegram

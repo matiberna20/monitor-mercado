@@ -354,6 +354,18 @@ def cartera() -> None:
 
 
 @app.command()
+def estres() -> None:
+    """Prueba de estrés: pérdida estimada si el mercado cae 10/20/30% o el dólar sube 30%."""
+    from monitor_mercado.riesgo.reporte import texto_estres
+
+    ctx = _contexto()
+    try:
+        typer.echo(texto_estres(ctx.estres.correr()))
+    except Exception as e:  # noqa: BLE001
+        _salir_con_error(f"No se pudo correr la prueba de estrés: {e}")
+
+
+@app.command()
 def dividendos() -> None:
     """Dividendos de tu cartera: próximos cobros, cobrados en el último año y rendimiento total."""
     from monitor_mercado.dividendos.reporte import texto_dividendos

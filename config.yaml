@@ -292,6 +292,20 @@ estres:
   caidas_mercado: [0.10, 0.20, 0.30]
   suba_dolar: 0.30
 
+asistente:
+  # Preguntas en lenguaje natural por Telegram ("¿cómo me fue esta semana?").
+  # Usa la API de Claude (pago por uso): además hace falta ANTHROPIC_API_KEY en el .env.
+  habilitado: true
+  modelo: claude-opus-5-5
+  # Cuánto razona antes de responder: low (más barato) | medium | high | xhigh | max.
+  esfuerzo: low
+  # Tope de tokens de cada respuesta (incluye el razonamiento).
+  max_tokens: 4000
+  # Máximo de rondas de consultas a los datos por pregunta.
+  max_vueltas: 6
+  # Tope de preguntas por día (se cuenta en la base de datos).
+  consultas_por_dia: 30
+
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).
   canal: telegram

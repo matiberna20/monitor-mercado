@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from monitor_mercado.alertas.repositorio import RepositorioAlertas
 from monitor_mercado.alertas.servicio import ServicioAlertas
+from monitor_mercado.asistente.herramientas import EjecutorHerramientas
+from monitor_mercado.asistente.servicio import ServicioAsistente
 from monitor_mercado.backtest.servicio import ServicioBacktest
 from monitor_mercado.cartera.servicio import ServicioCartera
 from monitor_mercado.configuracion import Configuracion, Secretos, cargar_configuracion, cargar_secretos
@@ -69,6 +71,7 @@ class Contexto:
     diario: ServicioDiario | None = None
     dividendos: ServicioDividendos | None = None
     estres: ServicioEstres | None = None
+    asistente: ServicioAsistente | None = None
 
     def buscador(self) -> BuscadorSimbolos:
         """Buscador con tu watchlist, tu cartera y las empresas que seguís (se arma al momento)."""
@@ -169,11 +172,20 @@ def armar_contexto() -> Contexto:
         if cliente_claude and cfg.resultados.usar_claude else None,
     )
 
+    # El asistente usa su propio cliente: no depende de que las noticias o resultados usen Claude.
+    cliente_asistente = None
+    if secretos.anthropic_api_key and cfg.asistente.habilitado:
+        import anthropic
+
+        cliente_asistente = cliente_claude or anthropic.Anthropic(
+            api_key=secretos.anthropic_api_key.get_secret_value(), max_retries=3
+        )
+
     tecnico = ServicioTecnico(almacen, cfg)
     diario = ServicioDiario(RepositorioDiario(motor), proveedor, cfg)
     cartera = ServicioCartera(cfg.cartera.ruta(), proveedor, cfg, motor, armar_fuentes(cfg, secretos), nombres,
                               diario=diario)
-    return Contexto(
+    ctx = Contexto(
         cfg=cfg,
         secretos=secretos,
         proveedor=proveedor,
@@ -190,3 +202,6 @@ def armar_contexto() -> Contexto:
         dividendos=ServicioDividendos(FuenteDividendosYahoo(), proveedor, cfg, cartera, diario),
         estres=ServicioEstres(almacen, cartera, proveedor, cfg),
     )
+    # Las herramientas del asistente consultan los mismos servicios del contexto.
+    ctx.asistente = ServicioAsistente(cliente_asistente, EjecutorHerramientas(ctx), cfg.asistente, motor)
+    return ctx

@@ -670,6 +670,66 @@ y qué tan seguido acertás.
 
 ---
 
+## 4m. Preguntas en lenguaje natural
+
+Escribile al bot **sin comando**, como a una persona, y te responde con los datos reales del sistema:
+
+> ¿Cómo me fue esta semana?
+> ¿Qué pasó con NVDA hoy?
+> ¿Cuánto gané con las ventas de este año?
+> ¿Qué stops tengo cerca de saltar?
+
+Desde la terminal: `monitor preguntar ¿cómo me fue esta semana?`
+
+### Cómo funciona
+
+Usa la API de Claude con **herramientas** (*tool use*): Claude no recibe toda la base de datos, sino que pide
+lo que necesita y el sistema se lo da consultando los mismos servicios que usan los comandos:
+
+| Herramienta | Qué consulta |
+|---|---|
+| `ver_cartera` | `/cartera` (con dividendos y rendimiento total) |
+| `evolucion_cartera` | Variación del valor de la cartera en los últimos N días |
+| `precio` | `/precio` |
+| `noticias` | `/noticias` |
+| `resultados_empresa` | `/resultados` |
+| `diario_operaciones` | `/diario` |
+| `alertas_y_stops` | `/alertas` y `/stops` |
+| `dividendos` | `/dividendos` |
+
+- **Solo te responde a vos** (el mismo chat ID que el resto del bot).
+- **Nunca recomienda comprar o vender:** responde con datos y contexto, y cada respuesta termina con el aviso
+  legal de `aviso_legal.py`.
+- **Cada pregunta es independiente:** no recuerda la anterior (así cada consulta cuesta poco y es predecible).
+
+### Activarlo
+
+1. Cargá `ANTHROPIC_API_KEY` en el `.env` (ver "Activar el sentimiento con Claude", más arriba: es la misma clave).
+2. Reiniciá el bot. Sin la clave, el bot te avisa que falta en vez de responder.
+
+### Control de costos (`config.yaml → asistente`)
+
+| Clave | Por defecto | Qué controla |
+|---|---|---|
+| `modelo` | `claude-opus-5-5` | El modelo de Claude |
+| `esfuerzo` | `low` | Cuánto razona antes de responder (más alto = mejor y más caro) |
+| `max_tokens` | `4000` | Tope de cada respuesta |
+| `max_vueltas` | `6` | Rondas de consultas a los datos por pregunta |
+| `consultas_por_dia` | `30` | Tope diario de preguntas (se guarda en la base y sobrevive a reinicios) |
+
+Con esos valores, una pregunta típica (2 o 3 consultas a los datos) cuesta del orden de unos pocos centavos de
+dólar. Si el modelo rechaza una pregunta por sus filtros de seguridad, la API reintenta automáticamente con otro
+modelo (*fallback*); en una cartera eso casi no debería pasar.
+
+### Limitaciones del asistente
+
+- Puede **equivocarse al interpretar** los datos: para decisiones, mirá el comando correspondiente.
+- Sabe solo lo que hay en el sistema (y las noticias de sus fuentes): no navega por internet.
+- Los precios tienen la misma demora de 15-20 minutos.
+- Es un servicio **pago por uso**: el tope diario protege de sorpresas, pero cada pregunta tiene costo.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -725,6 +785,7 @@ creando software/
 │   ├── riesgo/              tamaño de posición y prueba de estrés
 │   ├── diario/              compras y ventas, costo promedio, resultado realizado
 │   ├── dividendos/          dividendos cobrados y próximos, rendimiento total
+│   ├── asistente/           preguntas en lenguaje natural (Claude + herramientas)
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

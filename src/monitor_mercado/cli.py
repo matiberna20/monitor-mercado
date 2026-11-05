@@ -354,6 +354,13 @@ def cartera() -> None:
 
 
 @app.command()
+def preguntar(pregunta: list[str] = typer.Argument(..., help="La pregunta, en lenguaje natural.")) -> None:
+    """Pregunta en lenguaje natural (usa la API de Claude). Ej.: monitor preguntar ¿cómo me fue esta semana?"""
+    ctx = _contexto()
+    typer.echo(ctx.asistente.responder(" ".join(pregunta)))
+
+
+@app.command()
 def estres() -> None:
     """Prueba de estrés: pérdida estimada si el mercado cae 10/20/30% o el dólar sube 30%."""
     from monitor_mercado.riesgo.reporte import texto_estres

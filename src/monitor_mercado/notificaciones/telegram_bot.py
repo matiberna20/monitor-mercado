@@ -80,7 +80,9 @@ AYUDA = (
     "/editar_op ID CAMPO VALOR · /borrar_op ID · /importar_diario (carga mi_cartera.csv)\n"
     "/dividendos - próximos cobros, cobrados en el último año y rendimiento total\n"
     "/estres - cuánto perdería tu cartera si el mercado cae 10/20/30% o el dólar sube 30%\n"
-    "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
+    "/chatid - muestra el ID de este chat\n\n"
+    "También podés escribir una pregunta sin comando (ej. \"¿cómo me fue esta semana?\" o \"¿qué pasó con NVDA "
+    "hoy?\") y te respondo con los datos del sistema (requiere ANTHROPIC_API_KEY).\n\n" + AYUDA_FORMATO
 )
 
 COMANDOS_MENU = [
@@ -704,6 +706,23 @@ async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await _responder(update, reporte_resumen(analisis, errores))
 
 
+async def responder_pregunta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Mensaje que no es un comando: pregunta en lenguaje natural para Claude."""
+    ctx = _ctx(context)
+    mensaje = update.effective_message
+    if mensaje is None or not (getattr(mensaje, "text", None) or "").strip():
+        return
+    asistente = getattr(ctx, "asistente", None)
+    if asistente is None:
+        await _responder(update, "No entendí. Mirá los comandos con /ayuda.")
+        return
+    try:  # "escribiendo..." mientras Claude piensa (si falla, no importa)
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+    except Exception:  # noqa: BLE001
+        pass
+    await _responder(update, await asyncio.to_thread(asistente.responder, mensaje.text))
+
+
 async def ignorar_desconocido(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Mensajes de chats no autorizados: no se responde, solo se registra."""
     chat = update.effective_chat
@@ -825,6 +844,8 @@ def construir_bot(ctx: Contexto) -> Application:
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))
+    # Texto libre del dueño (no comandos): pregunta en lenguaje natural.
+    app.add_handler(MessageHandler(duenio & filters.TEXT & ~filters.COMMAND, responder_pregunta))
 
     intervalo = cfg.alertas.intervalo_minutos * 60
     if app.job_queue is None:

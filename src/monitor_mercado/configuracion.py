@@ -140,6 +140,17 @@ class ConfigEstres(BaseModel):
     suba_dolar: float = Field(0.30, gt=0, le=5)
 
 
+class ConfigAsistente(BaseModel):
+    """Preguntas en lenguaje natural por Telegram (API de Claude, pago por uso)."""
+
+    habilitado: bool = True  # además hace falta ANTHROPIC_API_KEY en el .env
+    modelo: str = "claude-opus-5-5"
+    esfuerzo: Literal["low", "medium", "high", "xhigh", "max"] = "low"
+    max_tokens: int = Field(4000, ge=256, le=32000)  # tope de la respuesta (y del razonamiento)
+    max_vueltas: int = Field(6, ge=1, le=15)  # rondas de herramientas por pregunta
+    consultas_por_dia: int = Field(30, ge=1, le=1000)
+
+
 class ConfigAvisos(BaseModel):
     """Canal de salida de los avisos."""
 
@@ -201,6 +212,7 @@ class Configuracion(BaseModel):
     cartera: ConfigCartera = Field(default_factory=ConfigCartera)
     rebalanceo: ConfigRebalanceo = Field(default_factory=ConfigRebalanceo)
     estres: ConfigEstres = Field(default_factory=ConfigEstres)
+    asistente: ConfigAsistente = Field(default_factory=ConfigAsistente)
     avisos: ConfigAvisos = Field(default_factory=ConfigAvisos)
     rutas: ConfigRutas = Field(default_factory=ConfigRutas)
 

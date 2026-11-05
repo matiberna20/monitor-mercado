@@ -423,6 +423,31 @@ def borrar_stop(id_stop: int = typer.Argument(..., help="ID del stop (ver 'monit
 
 
 @app.command()
+def tamano(
+    simbolo: str,
+    entrada: float = typer.Option(..., "--entrada", "-e", help="Precio de entrada (moneda del activo)."),
+    stop_: float = typer.Option(..., "--stop", "-s", help="Precio del stop (moneda del activo)."),
+    riesgo: str = typer.Option(..., "--riesgo", "-r", help="'1%' del capital o un monto en USD (ej. 500)."),
+    capital: float | None = typer.Option(None, "--capital", "-c", help="Capital en USD (por defecto, tu cartera)."),
+) -> None:
+    """Calculadora de tamaño de posición: cuántas acciones comprar según tu riesgo."""
+    from monitor_mercado.riesgo.reporte import texto_tamano
+    from monitor_mercado.riesgo.tamano import parsear_tamano
+
+    def texto(x: float) -> str:  # con coma decimal: "820.125" se leería como miles
+        return f"{x}".replace(".", ",")
+
+    ctx = _contexto()
+    args = [ctx.buscador().resolver(simbolo), "entrada", texto(entrada), "stop", texto(stop_), "riesgo", riesgo]
+    if capital is not None:
+        args += ["capital", texto(capital)]
+    try:
+        typer.echo(texto_tamano(ctx.tamano.calcular(parsear_tamano(args))))
+    except (ErrorFormato, ValueError, ErrorDatos) as e:
+        _salir_con_error(f"No se pudo calcular: {e}")
+
+
+@app.command()
 def glosario(termino: str | None = typer.Argument(None, help="Término a buscar (ej. rsi).")) -> None:
     """Definiciones de los términos que usa el sistema."""
     typer.echo(texto_glosario(termino))

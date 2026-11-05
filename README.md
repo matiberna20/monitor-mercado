@@ -491,6 +491,38 @@ Te avisan por Telegram si una posición de tu cartera cae demasiado. **No venden
 
 ---
 
+## 4h. Calculadora de tamaño de posición
+
+Antes de comprar, te dice **cuántas acciones** comprar para que, si el precio toca tu stop, pierdas
+exactamente lo que elegiste arriesgar.
+
+| Telegram | Terminal |
+|---|---|
+| `/tamano AAPL entrada 200 stop 185 riesgo 1%` | `monitor tamano AAPL --entrada 200 --stop 185 --riesgo 1%` |
+| `/tamano AAPL entrada 200 stop 185 riesgo 500` | `monitor tamano AAPL -e 200 -s 185 -r 500` |
+| `/tamano ALUA.BA entrada 820 stop 760 riesgo 1% capital 20000` | `monitor tamano ALUA.BA -e 820 -s 760 -r 1% -c 20000` |
+
+- **Riesgo:** con `%` es un porcentaje del capital; sin `%`, un monto en dólares.
+- **Capital:** por defecto, el valor actual de tu cartera. Con `capital` usás otro monto (en USD).
+- **Precios en la moneda del activo,** como en tu broker (pesos para `ALUA.BA`). Se pasan a dólares con el
+  CCL o el tipo de cambio de Yahoo, igual que en `/cartera`.
+- **Devuelve:** acciones, monto a invertir, pérdida máxima y el peso que tendría ese símbolo en la cartera
+  (sumando lo que ya tenías). Avisa si supera el límite de concentración (`cartera.concentracion_maxima`, 25%).
+
+Cuenta: `acciones = riesgo / (entrada − stop)`, redondeado hacia abajo. Si eso cuesta más que el capital,
+se calcula con lo que alcanza.
+
+### Limitaciones de la calculadora
+
+- Es solo para **compras** (el stop tiene que estar por debajo de la entrada).
+- La pérdida máxima supone que vendés justo en el stop. Si el precio abre con un salto por debajo
+  (resultados, noticias con el mercado cerrado), la pérdida real es mayor.
+- No descuenta comisiones.
+- El peso se calcula sobre el capital (por defecto, el valor de tu cartera hoy), como si la compra se
+  hiciera con plata que ya está en la cartera.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -543,6 +575,7 @@ creando software/
 │   ├── backtest/            simulación con costos, walk-forward, bootstrap, reportes
 │   ├── cartera/             tu cartera, valuación y resumen de cierre
 │   ├── stops/               stop-loss y trailing stop sobre la cartera
+│   ├── riesgo/              tamaño de posición y prueba de estrés
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

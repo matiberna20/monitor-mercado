@@ -72,6 +72,7 @@ AYUDA = (
     "/stop SIMBOLO 10 - avisa si cae 10% desde tu precio de compra\n"
     "/trailing SIMBOLO 8 - avisa si cae 8% desde su máximo desde que la tenés\n"
     "/stops - tus stops · /borrar_stop ID - borra uno\n"
+    "/tamano SIMBOLO entrada 200 stop 185 riesgo 1% - cuántas acciones comprar según tu riesgo\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -80,6 +81,7 @@ COMANDOS_MENU = [
     BotCommand("cartera", "Tu cartera: ganancias y pérdidas"),
     BotCommand("resumen_dia", "Resumen de cierre de tu cartera"),
     BotCommand("stops", "Tus stop-loss y trailing stops"),
+    BotCommand("tamano", "Cuántas acciones comprar según tu riesgo"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -454,6 +456,24 @@ async def cmd_borrar_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await _responder(update, f"Stop #{id_stop} borrado." if ok else f"No existe el stop #{id_stop}.")
 
 
+async def cmd_tamano(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/tamano SIMBOLO entrada X stop Y riesgo Z: calculadora de tamaño de posición."""
+    from monitor_mercado.riesgo.reporte import texto_tamano
+    from monitor_mercado.riesgo.tamano import parsear_tamano
+
+    args = context.args or []
+    try:
+        solicitud = parsear_tamano(args)
+        calculo = await asyncio.to_thread(_ctx(context).tamano.calcular, solicitud)
+    except ErrorFormato as e:
+        await _responder(update, str(e))
+        return
+    except (ValueError, ErrorDatos) as e:
+        await _responder(update, _error(context, args[0] if args else "", e, "No se pudo calcular"))
+        return
+    await _responder(update, texto_tamano(calculo))
+
+
 def hubo_rueda_hoy(ctx: Contexto, hoy) -> bool:
     """True si hoy operó Wall Street (descarta fines de semana y feriados)."""
     if hoy.weekday() >= 5:
@@ -625,6 +645,7 @@ def construir_bot(ctx: Contexto) -> Application:
         (["trailing"], con_simbolo(cmd_trailing)),
         (["stops"], cmd_stops),
         (["borrar_stop"], cmd_borrar_stop),
+        (["tamano"], con_simbolo(cmd_tamano)),  # Telegram no admite la ñ en comandos
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

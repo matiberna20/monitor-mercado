@@ -26,6 +26,7 @@ from monitor_mercado.resultados.repositorio import RepositorioResultados
 from monitor_mercado.resultados.servicio import ServicioResultados
 from monitor_mercado.resultados.valuacion import CacheInfo
 from monitor_mercado.senal_final import SenalFinal, combinar
+from monitor_mercado.riesgo.tamano import ServicioTamano
 from monitor_mercado.simbolos import BuscadorSimbolos
 from monitor_mercado.stops.repositorio import RepositorioStops
 from monitor_mercado.stops.servicio import ServicioStops
@@ -59,6 +60,7 @@ class Contexto:
     cartera: ServicioCartera | None = None
     nombres: ResolutorNombres | None = None
     stops: ServicioStops | None = None
+    tamano: ServicioTamano | None = None
 
     def buscador(self) -> BuscadorSimbolos:
         """Buscador con tu watchlist, tu cartera y las empresas que seguís (se arma al momento)."""
@@ -163,4 +165,5 @@ def armar_contexto() -> Contexto:
         cartera=cartera,
         nombres=nombres,
         stops=ServicioStops(RepositorioStops(motor), proveedor, cfg, cartera),
+        tamano=ServicioTamano(proveedor, cfg, cartera),
     )

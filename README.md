@@ -9,6 +9,7 @@ Sistema personal en Python para seguir activos financieros. Se construye por eta
 | 3 | Noticias con puntaje de sentimiento | ✅ Lista |
 | 4 | Análisis de resultados de empresas | ✅ Lista |
 | 5 | Backtesting | ✅ Lista para probar |
+| 6 | Operar y entender la cartera: stops, tamaño de posición, rebalanceo, diario, dividendos, estrés, preguntas en lenguaje natural, panel web y Excel (secciones 4g a 4o) | ✅ Lista para probar |
 
 > ⚠️ **No es asesoramiento financiero.** Todo lo que produce este sistema es un insumo
 > informativo y probabilístico, no una recomendación de inversión. Es un complemento de
@@ -767,6 +768,40 @@ Se abre en `http://localhost:8501` (con `--puerto 8502` usás otro). Cerralo con
 
 ---
 
+## 4o. Exportar a Excel
+
+| Telegram | Terminal |
+|---|---|
+| `/exportar` | `monitor exportar` |
+
+Genera un `.xlsx` con estas hojas:
+
+| Hoja | Contenido |
+|---|---|
+| Cartera | Cada posición: cantidad, precio, variación del día, valor, costo, resultado y peso (USD) |
+| Operaciones | El diario de compras y ventas |
+| Dividendos | Cobrados en los últimos 12 meses y próximos cobros |
+| Resultado por posición | No realizado + realizado + dividendos = total, por símbolo (incluye lo que ya vendiste) |
+| Notas | Fecha, criterios de cálculo y aviso legal |
+
+- Por Telegram te llega como **archivo adjunto**; desde la terminal queda en la carpeta `exports/`
+  (por ejemplo `exports/cartera_2026-11-05_1406.xlsx`). La carpeta está en `.gitignore`: no se sube a Git.
+- Usa las mismas tablas que el panel web.
+- Los porcentajes van como número (`5` = 5%) para poder hacer cuentas en Excel.
+- Si una fuente falla (por ejemplo, Yahoo no responde con los dividendos), esa hoja sale con una nota y el resto se
+  exporta igual.
+
+**Dependencia nueva:** `openpyxl`, la librería que usa pandas para escribir archivos `.xlsx`. Si ya tenías el
+proyecto instalado, actualizá con `.\.venv\Scripts\python.exe -m pip install -e ".[dev]"`.
+
+### Limitaciones de la exportación
+
+- Es una foto del momento, con los precios demorados 15-20 minutos.
+- Los montos en otras monedas se pasan a dólares al tipo de cambio de hoy.
+- No incluye impuestos ni retenciones.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -825,6 +860,7 @@ creando software/
 │   ├── asistente/           preguntas en lenguaje natural (Claude + herramientas)
 │   ├── tablas.py            tablas para el panel y el Excel (sin cálculos propios)
 │   ├── panel.py             panel web local (Streamlit)
+│   ├── exportar.py          exportación a Excel
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)
@@ -832,5 +868,6 @@ creando software/
 │   └── cli.py               comandos de terminal
 ├── tests/                   tests automáticos (pytest)
 ├── data/                    base SQLite (se crea sola)
+├── exports/                 Excel exportados (no se sube a git)
 └── logs/                    monitor.log
 ```

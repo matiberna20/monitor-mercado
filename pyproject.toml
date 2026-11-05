@@ -20,6 +20,7 @@ dependencies = [
     "matplotlib>=3.8",
     "anthropic>=1.9",
     "feedparser>=6.0",
+    "openpyxl>=3.1",  # para exportar la cartera a Excel (/exportar); pandas lo usa para escribir .xlsx
     "tzdata",  # Windows no trae la base de husos horarios IANA; zoneinfo la necesita.
 ]
 

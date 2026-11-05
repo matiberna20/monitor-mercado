@@ -80,6 +80,7 @@ AYUDA = (
     "/editar_op ID CAMPO VALOR · /borrar_op ID · /importar_diario (carga mi_cartera.csv)\n"
     "/dividendos - próximos cobros, cobrados en el último año y rendimiento total\n"
     "/estres - cuánto perdería tu cartera si el mercado cae 10/20/30% o el dólar sube 30%\n"
+    "/exportar - te mando un Excel con tu cartera, operaciones, dividendos y resultados\n"
     "/chatid - muestra el ID de este chat\n\n"
     "También podés escribir una pregunta sin comando (ej. \"¿cómo me fue esta semana?\" o \"¿qué pasó con NVDA "
     "hoy?\") y te respondo con los datos del sistema (requiere ANTHROPIC_API_KEY).\n\n" + AYUDA_FORMATO
@@ -97,6 +98,7 @@ COMANDOS_MENU = [
     BotCommand("vendi", "Registrar una venta"),
     BotCommand("dividendos", "Dividendos: próximos y cobrados"),
     BotCommand("estres", "Prueba de estrés de tu cartera"),
+    BotCommand("exportar", "Excel con tu cartera"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -425,6 +427,25 @@ async def cmd_resumen_dia(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     resumen = await asyncio.to_thread(ctx.cartera.resumen_dia)
     rendimiento = await asyncio.to_thread(_rendimiento_de, ctx, resumen.estado)
     await _responder(update, texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento, rendimiento))
+
+
+async def cmd_exportar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/exportar: manda un Excel con cartera, operaciones, dividendos y resultado por posición."""
+    from monitor_mercado.exportar import exportar
+
+    ctx = _ctx(context)
+    await _responder(update, "Armando el Excel...")
+    try:
+        ruta = await asyncio.to_thread(exportar, ctx, ctx.cfg.rutas.ruta_exports())
+    except Exception as e:  # noqa: BLE001
+        log.exception("Error exportando a Excel")
+        await _responder(update, f"No se pudo generar el Excel: {e}")
+        return
+    if update.effective_message:
+        with open(ruta, "rb") as archivo:
+            await update.effective_message.reply_document(
+                document=archivo, filename=ruta.name,
+                caption="Tu cartera en Excel: Cartera, Operaciones, Dividendos y Resultado por posición.")
 
 
 async def cmd_estres(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -841,6 +862,7 @@ def construir_bot(ctx: Contexto) -> Application:
         (["importar_diario"], cmd_importar_diario),
         (["dividendos"], cmd_dividendos),
         (["estres"], cmd_estres),
+        (["exportar"], cmd_exportar),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

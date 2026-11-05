@@ -167,6 +167,11 @@ class ConfigRutas(BaseModel):
     ciks_sec: str = "data/ciks_sec.json"
     graficos: str = "data/graficos"
     logs: str = "logs"
+    exports: str = "exports"
+
+    def ruta_exports(self) -> Path:
+        """Carpeta donde se guardan los Excel exportados."""
+        return _absoluta(self.exports)
 
     def ruta_historico(self) -> Path:
         """Carpeta de los CSV de precios históricos."""

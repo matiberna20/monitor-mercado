@@ -11,9 +11,10 @@ __pycache__/
 # Tu cartera: información financiera personal, no se sube
 mi_cartera.csv
 
-# Datos locales y logs
+# Datos locales, logs y exportaciones (información personal)
 data/
 logs/
+exports/
 
 # Paquetes para compartir (se regeneran con git archive)
 *.zip

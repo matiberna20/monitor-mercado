@@ -626,6 +626,19 @@ def bot() -> None:
 
 
 @app.command()
+def exportar() -> None:
+    """Genera un Excel (cartera, operaciones, dividendos, resultado por posición) en la carpeta exports/."""
+    from monitor_mercado.exportar import exportar as generar
+
+    ctx = _contexto()
+    try:
+        ruta = generar(ctx, ctx.cfg.rutas.ruta_exports())
+    except Exception as e:  # noqa: BLE001
+        _salir_con_error(f"No se pudo generar el Excel: {e}")
+    typer.echo(f"Excel guardado en: {ruta}")
+
+
+@app.command()
 def panel(puerto: int = typer.Option(8501, "--puerto", help="Puerto local del panel.")) -> None:
     """Abre el panel web local (Streamlit) con cartera, evolución, alertas, diario, dividendos y estrés."""
     import importlib.util

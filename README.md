@@ -460,6 +460,37 @@ Son reglas simples: pueden dejar afuera alguna noticia importante.
 
 ---
 
+## 4g. Stop-loss y trailing stop
+
+Te avisan por Telegram si una posición de tu cartera cae demasiado. **No venden nada**: son avisos.
+
+| Telegram | Terminal | Qué hace |
+|---|---|---|
+| `/stop AAPL 10` | `monitor stop AAPL 10` | **Stop-loss:** avisa si AAPL cae 10% desde tu precio de compra |
+| `/trailing AAPL 8` | `monitor trailing AAPL 8` | **Trailing stop:** avisa si AAPL cae 8% desde su máximo desde que la tenés |
+| `/stops` | `monitor stops` | Lista tus stops con el precio de hoy y cuánto le falta a cada uno |
+| `/borrar_stop 3` | `monitor borrar-stop 3` | Borra el stop #3 |
+
+- **Por defecto para toda la cartera:** en `config.yaml → cartera` poné `stop_loss_por_defecto: 15` y/o
+  `trailing_por_defecto: 20`. Se aplican a cada posición que no tenga un stop propio. Si borrás uno de
+  estos, no se vuelve a crear; si vendés la posición, se borra solo.
+- **Un stop de cada tipo por posición:** repetir `/stop AAPL 12` reemplaza el anterior.
+- **Funciona como las alertas:** se revisa con el mismo intervalo, solo con el mercado abierto, avisa al
+  **cruzar** el nivel (si ya estaba abajo al crearlo, espera a que suba y vuelva a caer), no repite
+  mientras el precio sigue abajo y respeta el `enfriamiento_minutos_repetir`. `/revisar` también los revisa.
+- **Todo en dólares:** las posiciones en pesos se pasan a USD con el CCL, igual que en `/cartera`.
+
+### Limitaciones de los stops
+
+- El **máximo del trailing** arranca el día que creás el stop (el mayor entre el precio de ese momento y tu
+  precio de compra) y se actualiza solo en cada revisión con el mercado abierto. No mira el historial
+  anterior, y si el precio sube y baja entre dos revisiones, ese pico no cuenta.
+- El stop-loss necesita el **precio de compra**; las posiciones sin costo solo admiten trailing.
+- Con precios demorados 15-20 minutos, en una caída rápida el aviso llega cuando el precio ya está más abajo
+  del nivel. Para un stop que se ejecute solo, usá la orden stop de tu broker.
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -510,6 +541,8 @@ creando software/
 │   ├── noticias/            fuentes RSS/API, sentimiento con Claude, agregado, reporte
 │   ├── resultados/          calendario, métricas, sorpresas, comunicado, valuación, veredicto
 │   ├── backtest/            simulación con costos, walk-forward, bootstrap, reportes
+│   ├── cartera/             tu cartera, valuación y resumen de cierre
+│   ├── stops/               stop-loss y trailing stop sobre la cartera
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

@@ -101,6 +101,9 @@ class ConfigCartera(BaseModel):
     noticias_maximas: int = Field(8, ge=0, le=20)
     concentracion_maxima: float = Field(0.25, gt=0, le=1)
     umbral_movimiento: float = Field(0.05, gt=0)
+    # Stops que se aplican a todas las posiciones sin uno propio (en %, ej. 15). Vacío = ninguno.
+    stop_loss_por_defecto: float | None = Field(None, gt=0, lt=100)
+    trailing_por_defecto: float | None = Field(None, gt=0, lt=100)
 
     def ruta(self) -> Path:
         """Ruta absoluta del archivo de cartera."""

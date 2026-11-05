@@ -25,6 +25,7 @@ def crear_motor(ruta: Path | str) -> Engine:
     from monitor_mercado.noticias import modelos as _noticias  # noqa: F401
     from monitor_mercado.resultados import modelos as _resultados  # noqa: F401
     from monitor_mercado.cartera import servicio as _cartera  # noqa: F401
+    from monitor_mercado.stops import modelos as _stops  # noqa: F401
 
     if str(ruta) == ":memory:":
         # Una base en memoria existe solo dentro de su conexión: StaticPool hace

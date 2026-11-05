@@ -263,6 +263,10 @@ cartera:
   concentracion_maxima: 0.25
   # Destaca las acciones que se movieron más que esto en el día (0.05 = 5%).
   umbral_movimiento: 0.05
+  # Stops que se aplican a TODAS las posiciones que no tengan uno propio (en %).
+  # Vacío = ninguno. Los que pongas con /stop o /trailing tienen prioridad.
+  stop_loss_por_defecto:      # ej. 15 = avisa si cae 15% desde tu precio de compra
+  trailing_por_defecto:       # ej. 20 = avisa si cae 20% desde su máximo
 
 avisos:
   # Canal por donde salen los avisos (por ahora solo Telegram).

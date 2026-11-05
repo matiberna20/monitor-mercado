@@ -27,6 +27,8 @@ from monitor_mercado.resultados.servicio import ServicioResultados
 from monitor_mercado.resultados.valuacion import CacheInfo
 from monitor_mercado.senal_final import SenalFinal, combinar
 from monitor_mercado.simbolos import BuscadorSimbolos
+from monitor_mercado.stops.repositorio import RepositorioStops
+from monitor_mercado.stops.servicio import ServicioStops
 from monitor_mercado.tecnico.historico import AlmacenHistorico, FuenteYahoo
 from monitor_mercado.tecnico.servicio import Analisis, ServicioTecnico
 
@@ -56,6 +58,7 @@ class Contexto:
     backtest: ServicioBacktest | None = None
     cartera: ServicioCartera | None = None
     nombres: ResolutorNombres | None = None
+    stops: ServicioStops | None = None
 
     def buscador(self) -> BuscadorSimbolos:
         """Buscador con tu watchlist, tu cartera y las empresas que seguís (se arma al momento)."""
@@ -147,6 +150,7 @@ def armar_contexto() -> Contexto:
     )
 
     tecnico = ServicioTecnico(almacen, cfg)
+    cartera = ServicioCartera(cfg.cartera.ruta(), proveedor, cfg, motor, armar_fuentes(cfg, secretos), nombres)
     return Contexto(
         cfg=cfg,
         secretos=secretos,
@@ -156,6 +160,7 @@ def armar_contexto() -> Contexto:
         noticias=noticias,
         resultados=resultados,
         backtest=ServicioBacktest(tecnico, cfg),
-        cartera=ServicioCartera(cfg.cartera.ruta(), proveedor, cfg, motor, armar_fuentes(cfg, secretos), nombres),
+        cartera=cartera,
         nombres=nombres,
+        stops=ServicioStops(RepositorioStops(motor), proveedor, cfg, cartera),
     )

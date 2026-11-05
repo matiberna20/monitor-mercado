@@ -69,6 +69,9 @@ AYUDA = (
     "/backtest_resumen [completa] - backtest de toda la watchlist\n"
     "/cartera - ganancia o pérdida de cada posición de tu cartera\n"
     "/resumen_dia - el resumen de cierre (llega solo cada día hábil a las 17:20 hora Argentina)\n"
+    "/stop SIMBOLO 10 - avisa si cae 10% desde tu precio de compra\n"
+    "/trailing SIMBOLO 8 - avisa si cae 8% desde su máximo desde que la tenés\n"
+    "/stops - tus stops · /borrar_stop ID - borra uno\n"
     "/chatid - muestra el ID de este chat\n\n" + AYUDA_FORMATO
 )
 
@@ -76,6 +79,7 @@ COMANDOS_MENU = [
     BotCommand("grafico", "Lectura del gráfico como un trader"),
     BotCommand("cartera", "Tu cartera: ganancias y pérdidas"),
     BotCommand("resumen_dia", "Resumen de cierre de tu cartera"),
+    BotCommand("stops", "Tus stop-loss y trailing stops"),
     BotCommand("alerta", "Crear una alerta"),
     BotCommand("alertas", "Ver alertas"),
     BotCommand("borrar", "Borrar una alerta"),
@@ -398,6 +402,58 @@ async def cmd_resumen_dia(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await _responder(update, texto_resumen_dia(resumen, ctx.cfg.cartera.umbral_movimiento))
 
 
+async def _crear_stop(update: Update, context: ContextTypes.DEFAULT_TYPE, tipo_txt: str) -> None:
+    from monitor_mercado.alertas.parser import parsear_numero
+    from monitor_mercado.stops.modelos import TipoStop
+    from monitor_mercado.stops.reporte import mensaje_creado
+    from monitor_mercado.stops.servicio import ErrorStop
+
+    tipo = TipoStop.STOP_LOSS if tipo_txt == "stop" else TipoStop.TRAILING
+    args = context.args or []
+    if len(args) < 2:
+        await _responder(update, f"Uso: /{tipo_txt} SIMBOLO PORCENTAJE   (ej. /{tipo_txt} AAPL 10)")
+        return
+    try:
+        porcentaje = parsear_numero(args[1])
+        estado = await asyncio.to_thread(_ctx(context).stops.crear, args[0], tipo, porcentaje)
+    except (ErrorFormato, ErrorStop) as e:
+        await _responder(update, str(e))
+        return
+    except ErrorDatos as e:
+        await _responder(update, _error(context, args[0], e, "No se pudo crear el stop"))
+        return
+    await _responder(update, mensaje_creado(estado))
+
+
+async def cmd_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/stop SIMBOLO PCT: stop-loss desde el precio de compra."""
+    await _crear_stop(update, context, "stop")
+
+
+async def cmd_trailing(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/trailing SIMBOLO PCT: trailing stop desde el máximo."""
+    await _crear_stop(update, context, "trailing")
+
+
+async def cmd_stops(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/stops: lista los stops con el precio actual."""
+    from monitor_mercado.stops.reporte import texto_stops
+
+    estados = await asyncio.to_thread(_ctx(context).stops.estados)
+    await _responder(update, texto_stops(estados))
+
+
+async def cmd_borrar_stop(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/borrar_stop ID: elimina un stop."""
+    try:
+        id_stop = int((context.args or [""])[0].lstrip("#"))
+    except ValueError:
+        await _responder(update, "Uso: /borrar_stop ID (el número que aparece en /stops)")
+        return
+    ok = _ctx(context).stops.borrar(id_stop)
+    await _responder(update, f"Stop #{id_stop} borrado." if ok else f"No existe el stop #{id_stop}.")
+
+
 def hubo_rueda_hoy(ctx: Contexto, hoy) -> bool:
     """True si hoy operó Wall Street (descarta fines de semana y feriados)."""
     if hoy.weekday() >= 5:
@@ -480,14 +536,29 @@ async def _enviar(context: ContextTypes.DEFAULT_TYPE, chat_id: int, texto: str) 
 
 async def _revisar_y_avisar(context: ContextTypes.DEFAULT_TYPE, forzar: bool = False) -> int:
     chat_id: int = context.application.bot_data["chat_id"]
+    total = 0
     try:
         disparos = await asyncio.to_thread(_servicio(context).revisar, None, forzar)
     except Exception:  # noqa: BLE001 - una revisión fallida no debe tirar el bot
         log.exception("Error inesperado en la revisión de alertas")
-        return 0
+        disparos = []
     for d in disparos:
         await _enviar(context, chat_id, formato.mensaje_disparo(d))
-    return len(disparos)
+    total += len(disparos)
+
+    ctx = context.application.bot_data.get("ctx")
+    if ctx is not None and getattr(ctx, "stops", None) is not None:
+        from monitor_mercado.stops.reporte import mensaje_disparo_stop
+
+        try:
+            disparos_stop = await asyncio.to_thread(ctx.stops.revisar, None, forzar)
+        except Exception:  # noqa: BLE001
+            log.exception("Error inesperado en la revisión de stops")
+            disparos_stop = []
+        for d in disparos_stop:
+            await _enviar(context, chat_id, mensaje_disparo_stop(d))
+        total += len(disparos_stop)
+    return total
 
 
 async def tarea_periodica(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -550,6 +621,10 @@ def construir_bot(ctx: Contexto) -> Application:
         (["backtest_resumen"], cmd_backtest_resumen),
         (["cartera"], cmd_cartera),
         (["resumen_dia"], cmd_resumen_dia),
+        (["stop"], con_simbolo(cmd_stop)),
+        (["trailing"], con_simbolo(cmd_trailing)),
+        (["stops"], cmd_stops),
+        (["borrar_stop"], cmd_borrar_stop),
     ]:
         app.add_handler(CommandHandler(nombres, funcion, filters=duenio))
     app.add_handler(MessageHandler(~duenio, ignorar_desconocido))

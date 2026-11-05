@@ -102,21 +102,30 @@ def precio(
 @app.command()
 def revisar(forzar: bool = typer.Option(False, "--forzar", help="Ignorar el horario de mercado.")) -> None:
     """Hace una revisión de alertas y manda los avisos por Telegram (si está configurado)."""
+    from monitor_mercado.stops.reporte import mensaje_disparo_stop
+
     ctx = _contexto()
-    disparos = ctx.servicio.revisar(forzar=forzar)
-    for d in disparos:
-        texto = formato.mensaje_disparo(d)
+    textos = [formato.mensaje_disparo(d) for d in ctx.servicio.revisar(forzar=forzar)]
+    if ctx.stops is not None:
+        textos += [mensaje_disparo_stop(d) for d in ctx.stops.revisar(forzar=forzar)]
+    for texto in textos:
         typer.echo(texto + "\n")
-        if ctx.secretos.telegram_configurado:
-            try:
-                enviar_mensaje(
-                    ctx.secretos.telegram_bot_token.get_secret_value(),  # type: ignore[union-attr]
-                    ctx.secretos.telegram_chat_id,  # type: ignore[arg-type]
-                    texto,
-                )
-            except Exception as e:  # noqa: BLE001
-                log.error("No se pudo enviar el aviso por Telegram: %s", e)
-    typer.echo(formato.mensaje_revision(len(disparos)))
+        _enviar_telegram(ctx, texto)
+    typer.echo(formato.mensaje_revision(len(textos)))
+
+
+def _enviar_telegram(ctx: Contexto, texto: str) -> None:
+    """Manda un texto por Telegram si está configurado (los errores solo se registran)."""
+    if not ctx.secretos.telegram_configurado:
+        return
+    try:
+        enviar_mensaje(
+            ctx.secretos.telegram_bot_token.get_secret_value(),  # type: ignore[union-attr]
+            ctx.secretos.telegram_chat_id,  # type: ignore[arg-type]
+            texto,
+        )
+    except Exception as e:  # noqa: BLE001
+        log.error("No se pudo enviar el aviso por Telegram: %s", e)
 
 
 @app.command("validar-watchlist")
@@ -361,6 +370,56 @@ def resumen_dia(
             enviar_mensaje(ctx.secretos.telegram_bot_token.get_secret_value(),  # type: ignore[union-attr]
                            ctx.secretos.telegram_chat_id, parte)  # type: ignore[arg-type]
         typer.echo("\nEnviado por Telegram.")
+
+
+def _crear_stop(simbolo: str, porcentaje: float, tipo_txt: str) -> None:
+    from monitor_mercado.stops.modelos import TipoStop
+    from monitor_mercado.stops.reporte import mensaje_creado
+    from monitor_mercado.stops.servicio import ErrorStop
+
+    ctx = _contexto()
+    tipo = TipoStop.STOP_LOSS if tipo_txt == "stop" else TipoStop.TRAILING
+    try:
+        estado = ctx.stops.crear(ctx.buscador().resolver(simbolo), tipo, porcentaje)
+    except (ErrorStop, ErrorDatos) as e:
+        _salir_con_error(f"No se pudo crear el stop: {e}")
+    typer.echo(mensaje_creado(estado))
+
+
+@app.command()
+def stop(
+    simbolo: str,
+    porcentaje: float = typer.Argument(..., help="Caída desde tu precio de compra, en % (ej. 10)."),
+) -> None:
+    """Stop-loss: avisa si una posición cae X% desde tu precio de compra."""
+    _crear_stop(simbolo, porcentaje, "stop")
+
+
+@app.command()
+def trailing(
+    simbolo: str,
+    porcentaje: float = typer.Argument(..., help="Caída desde el máximo, en % (ej. 8)."),
+) -> None:
+    """Trailing stop: avisa si una posición cae X% desde su máximo desde que la tenés."""
+    _crear_stop(simbolo, porcentaje, "trailing")
+
+
+@app.command()
+def stops() -> None:
+    """Lista tus stops con el precio actual y cuánto le falta a cada uno."""
+    from monitor_mercado.stops.reporte import texto_stops
+
+    ctx = _contexto()
+    typer.echo(texto_stops(ctx.stops.estados()))
+
+
+@app.command("borrar-stop")
+def borrar_stop(id_stop: int = typer.Argument(..., help="ID del stop (ver 'monitor stops').")) -> None:
+    """Borra un stop."""
+    ctx = _contexto()
+    if not ctx.stops.borrar(id_stop):
+        _salir_con_error(f"No existe el stop #{id_stop}.")
+    typer.echo(f"Stop #{id_stop} borrado.")
 
 
 @app.command()

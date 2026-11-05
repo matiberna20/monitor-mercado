@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 import pandas as pd
@@ -36,6 +37,9 @@ def test_descarga_inicial_e_incremental(tmp_path, datos_ohlcv):
     assert fuente.pedidos[-1][1] is None  # primera vez: toda la historia
 
     fuente.series["AAPL"] = df  # aparecen ruedas nuevas
+    # El archivo se "envejece" a mano: en una máquina rápida pueden no pasar los 3,6 ms del refresco.
+    hace_un_rato = datetime.now().timestamp() - 60
+    os.utime(almacen.ruta("AAPL"), (hace_un_rato, hace_un_rato))
     actualizado = almacen.obtener("AAPL")
     assert len(actualizado) == 300 and not actualizado.index.duplicated().any()
     assert fuente.pedidos[-1][1] is not None  # segunda vez: incremental

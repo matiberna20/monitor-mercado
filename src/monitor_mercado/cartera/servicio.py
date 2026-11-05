@@ -181,6 +181,11 @@ class ServicioCartera:
         with self._sesiones.begin() as s:
             s.merge(FotoCartera(fecha=dia, valor=estado.valor, costo=estado.costo))
 
+    def historial(self) -> list[FotoCartera]:
+        """Fotos de cierre guardadas, de la más vieja a la más nueva (para el gráfico de evolución)."""
+        with self._sesiones() as s:
+            return list(s.scalars(select(FotoCartera).order_by(FotoCartera.fecha)))
+
     def variacion_desde(self, estado: EstadoCartera, dias: int, hoy: date) -> float | None:
         """Variación del valor contra la foto más cercana a ``dias`` atrás (None si no hay)."""
         objetivo = hoy - timedelta(days=dias)

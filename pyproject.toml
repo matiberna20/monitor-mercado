@@ -25,6 +25,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# Panel web local (`monitor panel`). Es opcional porque Streamlit es pesado y el bot no lo necesita.
+panel = ["streamlit>=1.30"]
 
 [project.scripts]
 monitor = "monitor_mercado.cli:app"

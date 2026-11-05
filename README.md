@@ -730,6 +730,43 @@ modelo (*fallback*); en una cartera eso casi no debería pasar.
 
 ---
 
+## 4n. Panel web (Streamlit)
+
+Un panel en el navegador, en tu PC, con todo junto:
+
+| Pestaña | Qué muestra |
+|---|---|
+| Encabezado | Valor de la cartera, resultado del día, desde la compra y rendimiento total con dividendos |
+| Cartera | Cada posición con ganancia, peso y un gráfico de pesos; aviso de concentración |
+| Evolución | Gráfico del valor de la cartera día a día (de las fotos del resumen de cierre) |
+| Alertas y stops | Alertas activas y stops con cuánto le falta a cada uno |
+| Diario | Realizado, no realizado, tasa de aciertos, ventas cerradas y todas las operaciones |
+| Dividendos | Próximos cobros y cobrados en los últimos 12 meses |
+| Prueba de estrés | Escenarios, betas y aporte al riesgo (se corre con un botón, porque tarda) |
+
+### Instalarlo y abrirlo
+
+Streamlit es una dependencia **opcional** (es pesada y el bot no la necesita):
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[panel]"
+.\.venv\Scripts\monitor.exe panel
+```
+
+Se abre en `http://localhost:8501` (con `--puerto 8502` usás otro). Cerralo con Ctrl+C en la terminal.
+
+- Usa **la misma base de datos y los mismos servicios** que el bot: lo que cargás por Telegram aparece acá.
+- Los precios se guardan 5 minutos para no consultar a Yahoo en cada clic; el botón **Actualizar precios**
+  los vuelve a pedir.
+
+### Limitaciones del panel
+
+- Es **solo para ver**: para crear alertas, stops u operaciones usá el bot o la terminal.
+- Escucha solo en tu PC (`localhost`): no es accesible desde el celular ni desde internet.
+- La evolución empieza el día que empezó a correr el resumen de cierre (antes no hay fotos guardadas).
+
+---
+
 ## 5. Limitaciones (importante)
 
 - **Demora en los precios.** Yahoo Finance (vía `yfinance`) es gratis, pero los precios suelen
@@ -786,6 +823,8 @@ creando software/
 │   ├── diario/              compras y ventas, costo promedio, resultado realizado
 │   ├── dividendos/          dividendos cobrados y próximos, rendimiento total
 │   ├── asistente/           preguntas en lenguaje natural (Claude + herramientas)
+│   ├── tablas.py            tablas para el panel y el Excel (sin cálculos propios)
+│   ├── panel.py             panel web local (Streamlit)
 │   ├── senal_final.py       combina técnico + noticias
 │   ├── explicacion.py       resumen "para aprender" y glosario
 │   ├── aplicacion.py        arma todas las piezas (lo usan la terminal y el bot)

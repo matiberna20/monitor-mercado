@@ -626,6 +626,22 @@ def bot() -> None:
 
 
 @app.command()
+def panel(puerto: int = typer.Option(8501, "--puerto", help="Puerto local del panel.")) -> None:
+    """Abre el panel web local (Streamlit) con cartera, evolución, alertas, diario, dividendos y estrés."""
+    import importlib.util
+    import subprocess
+    from pathlib import Path
+
+    if importlib.util.find_spec("streamlit") is None:
+        _salir_con_error('Falta Streamlit. Instalalo con:  .venv\\Scripts\\python.exe -m pip install -e ".[panel]"')
+    script = Path(__file__).with_name("panel.py")
+    typer.echo(f"Panel en http://localhost:{puerto} (Ctrl+C para cerrarlo).")
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(script), "--server.port", str(puerto),
+                    "--server.address", "localhost", "--browser.gatherUsageStats", "false",
+                    "--client.toolbarMode", "minimal"], check=False)
+
+
+@app.command()
 def formato_alerta() -> None:
     """Muestra el formato para crear alertas."""
     typer.echo(AYUDA_FORMATO)
